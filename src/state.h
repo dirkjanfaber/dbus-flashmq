@@ -13,6 +13,7 @@
 #include <optional>
 #include "serviceidentifier.h"
 #include "network.h"
+#include "homeassistant_discovery.h"
 
 #define VRM_INTEREST_TIMEOUT_SECONDS 130
 #define KEEPALIVE_TOKENS 3
@@ -109,6 +110,9 @@ struct State
 
     std::vector<Network> local_nets;
 
+    // Home Assistant Discovery
+    HomeAssistantDiscovery ha_discovery;
+
     State();
     ~State();
     void add_dbus_to_mqtt_mapping(const std::string &serivce, std::unordered_map<std::string, Item> &items, bool instance_must_be_known, bool force_publish=false);
@@ -142,6 +146,10 @@ struct State
     bool match_local_net(const struct sockaddr *addr) const;
     void write_bridge_connection_state(const std::string &bridge, const std::optional<bool> connected, const std::string &msg);
     void write_all_bridge_connection_states_debounced();
+
+    // Home Assistant Discovery methods
+    void init_home_assistant_discovery();
+    void configure_home_assistant_discovery(const std::unordered_map<std::string, std::string> &plugin_opts);
 };
 
 }

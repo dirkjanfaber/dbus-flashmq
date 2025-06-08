@@ -138,6 +138,34 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, ServiceIdentifi
 
     if (this->alive || fully_mapped_item.should_be_retained() || force_publish)
         fully_mapped_item.publish();
+
+    // Home Assistant Discovery integration
+    if (ha_discovery.isEnabled()) {
+        try {
+            ShortServiceName short_service_name(service, instance);
+
+            // Handle device name updates - these require republishing all sensors with updated device info
+            if (fully_mapped_item.get_path() == "/CustomName" || fully_mapped_item.get_path() == "/ProductName") {
+                auto service_items_it = dbus_service_items.find(service);
+                if (service_items_it != dbus_service_items.end()) {
+                    ha_discovery.publishAllSensorsForService(service, short_service_name, service_items_it->second);
+                }
+            } 
+            // Check if this is a supported sensor path for this service type
+            else if (ha_discovery.isSupportedSensor(short_service_name.service_type, fully_mapped_item.get_path())) {
+                // Use full context if available for better device naming
+                auto service_items_it = dbus_service_items.find(service);
+                if (service_items_it != dbus_service_items.end()) {
+                    ha_discovery.publishSensorEntityWithItems(fully_mapped_item, short_service_name, service_items_it->second);
+                } else {
+                    ha_discovery.publishSensorEntity(fully_mapped_item, short_service_name);
+                }
+            }
+        } catch (const std::exception &ex) {
+            flashmq_logf(LOG_ERR, "Error publishing HA discovery for %s%s: %s",
+                         service.c_str(), fully_mapped_item.get_path().c_str(), ex.what());
+        }
+    }
 }
 
 /**
@@ -837,12 +865,30 @@ void State::scan_dbus_service(const std::string &service)
 
 void State::remove_dbus_service(const std::string &service)
 {
+    // Handle HA Discovery cleanup before removing the service data
+    if (ha_discovery.isEnabled()) {
+        try {
+            // Find the short service name for this service
+            for (const auto &mapping_pair : service_type_and_instance_to_full_service) {
+                if (mapping_pair.second == service) {
+                    auto pos = dbus_service_items.find(service);
+                    if (pos != dbus_service_items.end()) {
+                        ha_discovery.removeAllSensorsForService(mapping_pair.first, pos->second);
+                    }
+                    break;
+                }
+            }
+        } catch (const std::exception &ex) {
+            flashmq_logf(LOG_ERR, "Error removing HA discovery for service %s: %s", service.c_str(), ex.what());
+        }
+    }
+
+    // Publish null values for all items (existing logic)
     {
         auto pos = dbus_service_items.find(service);
         if (pos != dbus_service_items.end())
         {
             std::unordered_map<std::string, Item> &items = pos->second;
-
             for (auto &p : items)
             {
                 Item &item = p.second;
@@ -851,11 +897,11 @@ void State::remove_dbus_service(const std::string &service)
         }
     }
 
+    // Clean up service data (existing logic)
     dbus_service_items.erase(service);
     service_names_to_instance.erase(service);
 
     {
-        // Looping over values because it's the best way to guarantee we find it.
         auto pos = service_type_and_instance_to_full_service.begin();
         while (pos != service_type_and_instance_to_full_service.end())
         {
@@ -869,8 +915,6 @@ void State::remove_dbus_service(const std::string &service)
     }
 
     {
-        // This shouldn't be necessry because we did it already, but just making sure.
-        // Looping over values because it's the best way to guarantee we find it.
         auto pos = service_id_to_names.begin();
         while (pos != service_id_to_names.end())
         {
@@ -954,4 +998,41 @@ std::chrono::seconds QueuedChangedItem::age() const
 bool BridgeConnectionState::operator==(const BridgeConnectionState &other) const
 {
     return msg == other.msg && connected == other.connected;
+}
+
+void State::init_home_assistant_discovery()
+{
+    ha_discovery.setVrmId(unique_vrm_id);
+    flashmq_logf(LOG_INFO, "Home Assistant Discovery initialized with VRM ID: %s", unique_vrm_id.c_str());
+}
+
+void State::configure_home_assistant_discovery(const std::unordered_map<std::string, std::string> &plugin_opts)
+{
+    // Check if Home Assistant discovery is enabled
+    auto ha_enable_pos = plugin_opts.find("homeassistant_discovery");
+    if (ha_enable_pos != plugin_opts.end() && ha_enable_pos->second == "true") {
+        ha_discovery.setEnabled(true);
+
+        // Check for custom discovery prefix
+        auto ha_prefix_pos = plugin_opts.find("homeassistant_discovery_prefix");
+        if (ha_prefix_pos != plugin_opts.end()) {
+            ha_discovery.setDiscoveryPrefix(ha_prefix_pos->second);
+        }
+
+        // Configure which services to include (optional filtering)
+        auto services_pos = plugin_opts.find("homeassistant_services");
+        if (services_pos != plugin_opts.end()) {
+            // Parse comma-separated list: "temperature,battery,solarcharger"
+            std::vector<std::string> enabled_services = splitToVector(services_pos->second, ',');
+            ha_discovery.setEnabledServices(enabled_services);
+            flashmq_logf(LOG_INFO, "Home Assistant Discovery enabled for services: %s", services_pos->second.c_str());
+        } else {
+            flashmq_logf(LOG_INFO, "Home Assistant Discovery enabled for all supported services");
+        }
+
+        flashmq_logf(LOG_INFO, "Home Assistant Discovery enabled with prefix: %s",
+                     ha_discovery.getDiscoveryPrefix().c_str());
+    } else {
+        flashmq_logf(LOG_INFO, "Home Assistant Discovery disabled");
+    }
 }
