@@ -121,12 +121,19 @@ void flashmq_get_client_address(const std::weak_ptr<Client> &client, std::string
 
     if (addr)
     {
-        struct sockaddr_in dummy_addr;
-        memset(&dummy_addr, 0, sizeof(struct sockaddr_in));
+        // Use sockaddr_in6 to match FlashMQSockAddr's getLen() which returns sizeof(sockaddr_in6)
+        struct sockaddr_in6 dummy_addr;
+        memset(&dummy_addr, 0, sizeof(struct sockaddr_in6));
 
-        inet_pton(AF_INET, "127.0.0.1", &dummy_addr.sin_addr);
-        dummy_addr.sin_family = AF_INET;
-        dummy_addr.sin_port = htons(666);
+        // Set up as IPv4-mapped IPv6 address for 127.0.0.1
+        dummy_addr.sin6_family = AF_INET6;
+        dummy_addr.sin6_port = htons(666);
+
+        // IPv4-mapped IPv6 format: ::ffff:127.0.0.1
+        dummy_addr.sin6_addr.__in6_u.__u6_addr32[0] = 0;
+        dummy_addr.sin6_addr.__in6_u.__u6_addr32[1] = 0;
+        dummy_addr.sin6_addr.__in6_u.__u6_addr32[2] = htonl(0xffff);
+        dummy_addr.sin6_addr.__in6_u.__u6_addr32[3] = htonl(0x7f000001); // 127.0.0.1
 
         memcpy(addr->getAddr(), &dummy_addr, addr->getLen());
     }
