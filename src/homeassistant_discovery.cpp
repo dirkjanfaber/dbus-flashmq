@@ -23,6 +23,9 @@ std::string HADevice::toJson() const
 
     if (!sw_version.empty()) j["sw_version"] = sw_version;
     if (!configuration_url.empty()) j["configuration_url"] = configuration_url;
+	if (!via_device.empty()) {
+        j["via_device"] = via_device;
+    }
 
     return j.dump();
 }
@@ -61,6 +64,7 @@ HAServiceRegistry::HAServiceRegistry()
     registerSystemService();
     registerTankService();
     registerGridMeterService();
+	registerSwitchService();
 }
 
 void HAServiceRegistry::registerTemperatureService()
@@ -98,6 +102,17 @@ void HAServiceRegistry::registerTemperatureService()
     pressure_sensor.suggested_display_precision = 1;
     pressure_sensor.friendly_name_suffix = "Pressure";
     temp_def.sensors["/Pressure"] = pressure_sensor;
+
+    // Define the battery voltage sensor (for devices like Ruuvi)
+    HASensorConfig battery_voltage_sensor;
+    battery_voltage_sensor.device_class = "voltage";
+    battery_voltage_sensor.state_class = "measurement";
+    battery_voltage_sensor.unit_of_measurement = "V";
+    battery_voltage_sensor.icon = "mdi:battery";
+    battery_voltage_sensor.suggested_display_precision = 3;  // More precision for battery voltage
+    battery_voltage_sensor.entity_category = "diagnostic";    // Mark as diagnostic since it's device health info
+    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
+    temp_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
 
     // Custom device name extraction
     temp_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
@@ -624,6 +639,49 @@ void HAServiceRegistry::registerGridMeterService()
     service_definitions["grid"] = std::move(grid_def);
 }
 
+void HAServiceRegistry::registerSwitchService()
+{
+    HAServiceDefinition switch_def;
+    switch_def.friendly_name = "Switch Device";
+    switch_def.model_name = "Victron Switch";
+
+    // Device-level status
+    HASensorConfig connected_sensor;
+    connected_sensor.component = "binary_sensor";
+    connected_sensor.device_class = "connectivity";
+    connected_sensor.icon = "mdi:connection";
+    connected_sensor.entity_category = "diagnostic";
+    connected_sensor.friendly_name_suffix = "Connected";
+    connected_sensor.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
+    switch_def.sensors["/Connected"] = connected_sensor;
+
+    HASensorConfig device_state_sensor;
+    device_state_sensor.icon = "mdi:power-settings";
+    device_state_sensor.entity_category = "diagnostic";
+    device_state_sensor.friendly_name_suffix = "Device State";
+    device_state_sensor.value_template = "{% set states = {0: 'Off', 1: 'On', 2: 'Error'} %}{{ states[value_json.value] | default('Unknown') }}";
+    switch_def.sensors["/State"] = device_state_sensor;
+
+    // Custom device name extraction
+    switch_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
+        auto custom_name = items.find("/CustomName");
+        if (custom_name != items.end()) {
+            std::string name = custom_name->second.get_value().value.as_text();
+            if (!name.empty() && name != "---") return name;
+        }
+
+        auto product_name = items.find("/ProductName");
+        if (product_name != items.end()) {
+            std::string name = product_name->second.get_value().value.as_text();
+            if (!name.empty() && name != "---") return name;
+        }
+
+        return "Switch Device";
+    };
+
+    service_definitions["switch"] = std::move(switch_def);
+}
+
 const HAServiceDefinition* HAServiceRegistry::getServiceDefinition(const std::string& service_type) const
 {
     auto it = service_definitions.find(service_type);
@@ -688,6 +746,49 @@ const std::string &HomeAssistantDiscovery::getDiscoveryPrefix() const
     return discovery_prefix;
 }
 
+std::string HomeAssistantDiscovery::extractDeviceNameFromService(const std::string &full_service_name) const
+{
+    if (full_service_name.find("com.victronenergy.") == 0) {
+        std::vector<std::string> parts = splitToVector(full_service_name, '.');
+        if (parts.size() >= 4) {
+            // parts[0] = "com"
+            // parts[1] = "victronenergy"
+            // parts[2] = "temperature" (service type)
+            // parts[3] = "ruuvi_e6d73b9b0950" (device name)
+            return parts[3];
+        }
+    }
+
+    return "";
+}
+
+void HomeAssistantDiscovery::ensureGXSystemDevice()
+{
+    if (!enabled) {
+        return;
+    }
+
+    std::string gx_device_id = vrm_id;  // GX system uses VRM ID as device ID
+
+    // Check if GX system device already exists
+    if (published_devices.find(gx_device_id) != published_devices.end()) {
+        return;
+    }
+
+    const HAServiceDefinition* system_def = service_registry.getServiceDefinition("system");
+    if (system_def) {
+        std::string device_name = "GX System";
+        std::string model = "Venus GX (" + vrm_id + ")";
+
+        HADevice gx_device(device_name, model, vrm_id);
+        // No via_device for GX system - it's the root
+
+        published_devices[gx_device_id] = gx_device;
+
+        flashmq_logf(LOG_INFO, "Created GX System device with VRM ID: %s", vrm_id.c_str());
+    }
+}
+
 void HomeAssistantDiscovery::setVrmId(const std::string &vrm_id)
 {
     this->vrm_id = vrm_id;
@@ -741,26 +842,46 @@ std::string HomeAssistantDiscovery::sanitizeForHA(const std::string &input) cons
     return result;
 }
 
-std::string HomeAssistantDiscovery::createDeviceIdentifier(const ShortServiceName &short_service_name) const
+std::string HomeAssistantDiscovery::createDeviceIdentifier(const ShortServiceName &short_service_name,
+                                                          const std::string &full_service_name) const
 {
-    return vrm_id + "_" + sanitizeForHA(short_service_name);
+    if (!full_service_name.empty()) {
+        std::string device_name = extractDeviceNameFromService(full_service_name);
+        if (!device_name.empty()) {
+            return sanitizeForHA(short_service_name.service_type) + "_" + vrm_id + "_" + sanitizeForHA(device_name);
+        }
+    }
+
+    return sanitizeForHA(short_service_name.service_type) + "_" + vrm_id + "_" + sanitizeForHA(short_service_name);
 }
 
-std::string HomeAssistantDiscovery::createEntityId(const ShortServiceName &short_service_name, const std::string &dbus_path) const
+std::string HomeAssistantDiscovery::createEntityId(const ShortServiceName &short_service_name,
+                                                  const std::string &dbus_path,
+                                                  const std::string &full_service_name) const
 {
     std::string path_sanitized = sanitizeForHA(dbus_path);
-    return vrm_id + "_" + sanitizeForHA(short_service_name) + "_" + path_sanitized;
+
+    if (!full_service_name.empty()) {
+        std::string device_name = extractDeviceNameFromService(full_service_name);
+        if (!device_name.empty()) {
+            return sanitizeForHA(short_service_name.service_type) + "_" + vrm_id + "_" + sanitizeForHA(device_name) + "_" + path_sanitized;
+        }
+    }
+
+    return sanitizeForHA(short_service_name.service_type) + "_" + vrm_id + "_" + sanitizeForHA(short_service_name) + "_" + path_sanitized;
 }
 
-std::string HomeAssistantDiscovery::createDiscoveryTopic(const std::string &component, const std::string &object_id) const
+std::string HomeAssistantDiscovery::createDiscoveryTopic(const std::string &component,
+                                                        const std::string &device_id,
+                                                        const std::string &object_id) const
 {
-    return discovery_prefix + "/" + component + "/" + object_id + "/config";
+    return discovery_prefix + "/" + component + "/" + device_id + "/" + object_id + "/config";
 }
 
 std::string HomeAssistantDiscovery::createFriendlyEntityName(const std::string& base_device_name, const HASensorConfig& sensor_config) const
 {
     if (!sensor_config.friendly_name_suffix.empty()) {
-        return base_device_name + " " + sensor_config.friendly_name_suffix;
+        return sensor_config.friendly_name_suffix;
     }
     return base_device_name;
 }
@@ -770,10 +891,27 @@ HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_serv
                                              const std::unordered_map<std::string, Item> *all_items) const
 {
     std::string device_name;
-    std::string model = service_def ? service_def->model_name : "Victron Device";
+    std::string model;
+
+	if (service_def && !service_def->model_name.empty()) {
+        model = service_def->model_name;
+    } else {
+        model = "Victron Device";
+    }
+
+    bool has_custom_name = false;
 
     // Try to get custom device name if we have items and a custom function
     if (all_items && service_def && service_def->get_device_name) {
+        // Check if a custom name was actually set before calling the function
+        auto custom_name = all_items->find("/CustomName");
+        if (custom_name != all_items->end()) {
+            std::string custom_name_value = custom_name->second.get_value().value.as_text();
+            if (!custom_name_value.empty() && custom_name_value != "---") {
+                has_custom_name = true;
+            }
+        }
+
         device_name = service_def->get_device_name(*all_items);
     } else if (service_def) {
         device_name = service_def->friendly_name;
@@ -781,18 +919,45 @@ HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_serv
         device_name = "Victron Device";
     }
 
-    // Add instance to device name if not 0
-    std::string instance_part = short_service_name;
-    size_t slash_pos = instance_part.find('/');
-    if (slash_pos != std::string::npos) {
-        std::string instance_str = instance_part.substr(slash_pos + 1);
-        if (instance_str != "0") {
-            device_name += " " + instance_str;
+    // Use ProductName for model if available
+    if (all_items) {
+        auto product_name = all_items->find("/ProductName");
+        if (product_name != all_items->end()) {
+            std::string product_name_value = product_name->second.get_value().value.as_text();
+            if (!product_name_value.empty() && product_name_value != "---") {
+                model = product_name_value;
+            }
         }
     }
 
-    std::string identifier = createDeviceIdentifier(short_service_name);
-    HADevice device(device_name, model, identifier);
+	if (model.empty()) {
+        model = "Victron Device";
+    }
+
+    if (!has_custom_name) {
+        std::string instance_part = short_service_name;
+        size_t slash_pos = instance_part.find('/');
+        if (slash_pos != std::string::npos) {
+            std::string instance_str = instance_part.substr(slash_pos + 1);
+            if (instance_str != "0") {
+                device_name += " " + instance_str;
+            }
+        }
+    }
+
+    std::string identifier;
+    HADevice device;
+
+    if (short_service_name.service_type == "system") {
+        // The GX system device uses VRM ID as identifier (no service type prefix)
+        identifier = vrm_id;
+		model = "Venus GX (" + vrm_id + ")";
+        device = HADevice(device_name, model, identifier);
+    } else {
+        identifier = createDeviceIdentifier(short_service_name);
+        device = HADevice(device_name, model, identifier);
+        device.via_device = vrm_id;  // Connect to GX system
+    }
 
     return device;
 }
@@ -803,7 +968,7 @@ HAEntityConfig HomeAssistantDiscovery::createEntityConfig(const Item &item,
                                                         const std::string &device_name) const
 {
     std::string entity_name = createFriendlyEntityName(device_name, sensor_config);
-    std::string unique_id = createEntityId(short_service_name, item.get_path());
+	std::string unique_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
     std::string state_topic = "N/" + vrm_id + "/" + short_service_name + item.get_path();
 
     HAEntityConfig config(entity_name, unique_id, state_topic);
@@ -827,7 +992,17 @@ bool HomeAssistantDiscovery::isSupportedSensor(const std::string &service_type, 
         return false;
     }
 
-    return service_registry.hasSensorPath(service_type, dbus_path);
+	// Check if we have an exact match first
+    if (service_registry.hasSensorPath(service_type, dbus_path)) {
+        return true;
+    }
+
+    // For switch service, handle dynamic output discovery
+    if (service_type == "switch") {
+        return isSwitchOutputPath(dbus_path);
+    }
+
+    return false;
 }
 
 void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortServiceName &short_service_name)
@@ -840,12 +1015,23 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
         return;
     }
 
+	if (short_service_name.service_type != "system") {
+        ensureGXSystemDevice();
+    }
+
     flashmq_logf(LOG_DEBUG, "Publishing Home Assistant discovery for sensor: %s%s",
                  short_service_name.c_str(), item.get_path().c_str());
 
     try {
         const HAServiceDefinition* service_def = service_registry.getServiceDefinition(short_service_name.service_type);
         const HASensorConfig* sensor_config = service_registry.getSensorConfig(short_service_name.service_type, item.get_path());
+
+        // Handle dynamic switch configurations
+        HASensorConfig dynamic_config;
+        if (!sensor_config && short_service_name.service_type == "switch") {
+            dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+            sensor_config = &dynamic_config;
+        }
 
         if (!service_def || !sensor_config) {
             flashmq_logf(LOG_ERR, "No service definition or sensor config found for %s%s",
@@ -854,7 +1040,7 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
         }
 
         // Create device (only if not already published)
-        std::string device_id = createDeviceIdentifier(short_service_name);
+        std::string device_id = createDeviceIdentifier(short_service_name, item.get_service_name());
         if (published_devices.find(device_id) == published_devices.end()) {
             HADevice device = createDevice(short_service_name, service_def, nullptr);
             published_devices[device_id] = device;
@@ -866,8 +1052,8 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
         HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
         std::string entity_id = config.unique_id;
 
-        // Create discovery topic and payload
-        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, entity_id);
+        // Create discovery topic and payload - NOW WITH DEVICE ID
+        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
         std::string payload = config.toJson(device);
 
         // Publish to MQTT (always publish to update with latest info)
@@ -903,6 +1089,13 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         const HAServiceDefinition* service_def = service_registry.getServiceDefinition(short_service_name.service_type);
         const HASensorConfig* sensor_config = service_registry.getSensorConfig(short_service_name.service_type, item.get_path());
 
+        // Handle dynamic switch configurations
+        HASensorConfig dynamic_config;
+        if (!sensor_config && short_service_name.service_type == "switch") {
+            dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+            sensor_config = &dynamic_config;
+        }
+
         if (!service_def || !sensor_config) {
             flashmq_logf(LOG_ERR, "No service definition or sensor config found for %s%s",
                          short_service_name.service_type.c_str(), item.get_path().c_str());
@@ -910,7 +1103,7 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         }
 
         // Create/update device with proper name using all available items
-        std::string device_id = createDeviceIdentifier(short_service_name);
+        std::string device_id = createDeviceIdentifier(short_service_name, item.get_service_name());
         HADevice device = createDevice(short_service_name, service_def, &all_items);
         published_devices[device_id] = device;  // Always update the device
 
@@ -920,8 +1113,8 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
         std::string entity_id = config.unique_id;
 
-        // Create discovery topic and payload
-        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, entity_id);
+        // Create discovery topic and payload - NOW WITH DEVICE ID
+        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
         std::string payload = config.toJson(device);
 
         // Publish to MQTT
@@ -950,15 +1143,24 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
     }
 
     try {
-        std::string entity_id = createEntityId(short_service_name, item.get_path());
+        std::string entity_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
+        std::string device_id = createDeviceIdentifier(short_service_name, item.get_service_name());
 
         auto it = published_entities.find(entity_id);
         if (it != published_entities.end()) {
             const HASensorConfig* sensor_config = service_registry.getSensorConfig(short_service_name.service_type, item.get_path());
-            std::string component = sensor_config ? sensor_config->component : "sensor";
+            std::string component = "sensor"; // default
 
-            // Send empty payload to remove entity
-            std::string discovery_topic = createDiscoveryTopic(component, entity_id);
+            if (sensor_config) {
+                component = sensor_config->component;
+            } else if (short_service_name.service_type == "switch") {
+                // Handle dynamic switch configuration
+                HASensorConfig dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+                component = dynamic_config.component;
+            }
+
+            // Send empty payload to remove entity - NOW WITH DEVICE ID
+            std::string discovery_topic = createDiscoveryTopic(component, device_id, entity_id);
             flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
 
             published_entities.erase(it);
@@ -1003,6 +1205,97 @@ void HomeAssistantDiscovery::publishAllSensorsForService(const std::string &serv
         flashmq_logf(LOG_ERR, "Error publishing all Home Assistant sensors for service %s: %s",
                      service.c_str(), ex.what());
     }
+}
+
+bool HomeAssistantDiscovery::isSwitchOutputPath(const std::string &dbus_path) const
+{
+    if (dbus_path == "/Connected" || dbus_path == "/State") {
+        return true;
+    }
+
+    if (dbus_path.find("/SwitchableOutput/") == 0) {
+        return (dbus_path.find("/State") != std::string::npos ||
+                dbus_path.find("/Status") != std::string::npos ||
+                dbus_path.find("/Dimming") != std::string::npos);
+    }
+
+    return false;
+}
+
+HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std::string &dbus_path) const
+{
+    HASensorConfig config;
+
+    if (dbus_path == "/Connected") {
+        config.component = "binary_sensor";
+        config.device_class = "connectivity";
+        config.icon = "mdi:connection";
+        config.entity_category = "diagnostic";
+        config.friendly_name_suffix = "Connected";
+        config.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
+    }
+    else if (dbus_path == "/State") {
+        config.icon = "mdi:power-settings";
+        config.entity_category = "diagnostic";
+        config.friendly_name_suffix = "Device State";
+        config.value_template = "{% set states = {0: 'Off', 1: 'On', 2: 'Error'} %}{{ states[value_json.value] | default('Unknown') }}";
+    }
+    else if (dbus_path.find("/SwitchableOutput/") == 0) {
+        // Parse the output type and number
+        std::string remainder = dbus_path.substr(18); // Remove "/SwitchableOutput/"
+        size_t first_slash = remainder.find('/');
+        std::string output_part = remainder.substr(0, first_slash);
+        std::string property = remainder.substr(first_slash + 1);
+
+        std::string output_type;
+        std::string output_number;
+
+        // Parse output_N, pwm_N, or relay_N
+        size_t underscore_pos = output_part.find('_');
+        if (underscore_pos != std::string::npos) {
+            output_type = output_part.substr(0, underscore_pos);
+            output_number = output_part.substr(underscore_pos + 1);
+        }
+
+        if (property == "State") {
+            config.component = "binary_sensor";
+            config.device_class = "power";
+            config.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
+
+            if (output_type == "output") {
+                config.icon = "mdi:electric-switch";
+                config.friendly_name_suffix = "Output " + output_number + " State";
+            } else if (output_type == "pwm") {
+                config.icon = "mdi:sine-wave";
+                config.friendly_name_suffix = "PWM " + output_number + " State";
+            } else if (output_type == "relay") {
+                config.icon = "mdi:relay";
+                config.friendly_name_suffix = "Relay " + output_number + " State";
+            }
+        }
+        else if (property == "Status") {
+            config.icon = "mdi:information";
+            config.entity_category = "diagnostic";
+            config.value_template = "{% set statuses = {0: 'OK', 1: 'Error'} %}{{ statuses[value_json.value] | default('Unknown') }}";
+
+            if (output_type == "output") {
+                config.friendly_name_suffix = "Output " + output_number + " Status";
+            } else if (output_type == "pwm") {
+                config.friendly_name_suffix = "PWM " + output_number + " Status";
+            } else if (output_type == "relay") {
+                config.friendly_name_suffix = "Relay " + output_number + " Status";
+            }
+        }
+        else if (property == "Dimming" && output_type == "pwm") {
+            config.state_class = "measurement";
+            config.unit_of_measurement = "%";
+            config.icon = "mdi:brightness-percent";
+            config.suggested_display_precision = 0;
+            config.friendly_name_suffix = "PWM " + output_number + " Dimming";
+        }
+    }
+
+    return config;
 }
 
 void HomeAssistantDiscovery::removeAllSensorsForService(const ShortServiceName &short_service_name,
@@ -1059,10 +1352,27 @@ void HomeAssistantDiscovery::clearAll()
     flashmq_logf(LOG_INFO, "Clearing all Home Assistant discovery entities");
 
     // Remove all published entities
-    for (const auto &pair : published_entities) {
+	for (const auto &pair : published_entities) {
         try {
-            std::string discovery_topic = createDiscoveryTopic("sensor", pair.first);
-            flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
+            // We need to parse the entity_id to get device_id and component
+            // Entity ID format: vrm_id_service_type_instance_path
+            // Device ID format: vrm_id_service_type_instance
+            std::string entity_id = pair.first;
+
+            // Find the device_id by looking at published devices
+            std::string device_id;
+            for (const auto &device_pair : published_devices) {
+                if (entity_id.find(device_pair.first + "_") == 0) {
+                    device_id = device_pair.first;
+                    break;
+                }
+            }
+
+            if (!device_id.empty()) {
+                // Default to sensor component, could be made smarter
+                std::string discovery_topic = createDiscoveryTopic("sensor", device_id, entity_id);
+                flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
+            }
         } catch (const std::exception &ex) {
             flashmq_logf(LOG_ERR, "Error clearing Home Assistant discovery entity: %s", ex.what());
         }

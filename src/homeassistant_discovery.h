@@ -25,6 +25,7 @@ struct HADevice
     std::string identifiers;
     std::string sw_version;
     std::string configuration_url;
+	std::string via_device;
 
     HADevice() = default;
     HADevice(const std::string &name, const std::string &model, const std::string &identifier);
@@ -105,6 +106,7 @@ private:
     void registerSystemService();
     void registerTankService();
     void registerGridMeterService();
+    void registerSwitchService();
 
 public:
     HAServiceRegistry();
@@ -137,9 +139,15 @@ private:
     std::unordered_map<std::string, HAEntityConfig> published_entities;
 
     // Helper methods
-    std::string createDeviceIdentifier(const ShortServiceName &short_service_name) const;
-    std::string createEntityId(const ShortServiceName &short_service_name, const std::string &dbus_path) const;
-    std::string createDiscoveryTopic(const std::string &component, const std::string &object_id) const;
+	std::string extractDeviceNameFromService(const std::string &full_service_name) const;
+	std::string createDeviceIdentifier(const ShortServiceName &short_service_name,
+                                      const std::string &full_service_name = "") const;
+	std::string createEntityId(const ShortServiceName &short_service_name,
+                          const std::string &dbus_path,
+                          const std::string &full_service_name = "") const;
+	std::string createDiscoveryTopic(const std::string &component,
+                                const std::string &device_id,
+                                const std::string &object_id) const;
     std::string sanitizeForHA(const std::string &input) const;
     std::string createFriendlyEntityName(const std::string& base_device_name, const HASensorConfig& sensor_config) const;
 
@@ -153,6 +161,7 @@ private:
                                     const std::string &device_name) const;
 
     bool isServiceEnabled(const std::string& service_type) const;
+	void ensureGXSystemDevice();
 
 public:
     HomeAssistantDiscovery();
@@ -168,6 +177,8 @@ public:
 
     // Core sensor support
     bool isSupportedSensor(const std::string &service_type, const std::string &dbus_path) const;
+    bool isSwitchOutputPath(const std::string &dbus_path) const;
+    HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path) const;
 
     void publishSensorEntity(const Item &item, const ShortServiceName &short_service_name);
     void publishSensorEntityWithItems(const Item &item,
