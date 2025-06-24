@@ -112,6 +112,169 @@ HAServiceRegistry::HAServiceRegistry()
     registerTankService();
     registerGridMeterService();
 	registerSwitchService();
+	registerMeteoService();
+}
+
+void HAServiceRegistry::registerMeteoService()
+{
+    HAServiceDefinition meteo_def;
+    meteo_def.friendly_name = "Weather Station";
+    meteo_def.model_name = "Meteorological Sensor";
+
+    // Cell Temperature (main measurement)
+    HASensorConfig cell_temp_sensor;
+    cell_temp_sensor.device_class = "temperature";
+    cell_temp_sensor.state_class = "measurement";
+    cell_temp_sensor.unit_of_measurement = "°C";
+    cell_temp_sensor.icon = "mdi:thermometer";
+    cell_temp_sensor.suggested_display_precision = 1;
+    cell_temp_sensor.friendly_name_suffix = "Cell Temperature";
+    meteo_def.sensors["/CellTemperature"] = cell_temp_sensor;
+
+    // Irradiance (solar irradiance measurement)
+    HASensorConfig irradiance_sensor;
+    irradiance_sensor.device_class = "irradiance";
+    irradiance_sensor.state_class = "measurement";
+    irradiance_sensor.unit_of_measurement = "W/m²";
+    irradiance_sensor.icon = "mdi:solar-power";
+    irradiance_sensor.suggested_display_precision = 1;
+    irradiance_sensor.friendly_name_suffix = "Solar Irradiance";
+    meteo_def.sensors["/Irradiance"] = irradiance_sensor;
+
+    // Battery Voltage (sensor power)
+    HASensorConfig battery_voltage_sensor;
+    battery_voltage_sensor.device_class = "voltage";
+    battery_voltage_sensor.state_class = "measurement";
+    battery_voltage_sensor.unit_of_measurement = "V";
+    battery_voltage_sensor.icon = "mdi:battery";
+    battery_voltage_sensor.suggested_display_precision = 2;
+    battery_voltage_sensor.entity_category = "diagnostic";
+    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
+    meteo_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
+
+    // Connection status (connectivity indicator)
+    HASensorConfig connection_sensor;
+    connection_sensor.component = "binary_sensor";
+    connection_sensor.device_class = "connectivity";
+    connection_sensor.icon = "mdi:wifi";
+    connection_sensor.friendly_name_suffix = "Connected";
+    connection_sensor.value_template = "{{ 'ON' if value_json.value == 1 else 'OFF' }}";
+    meteo_def.sensors["/Connected"] = connection_sensor;
+
+    // Management Connection (communication method)
+    HASensorConfig mgmt_connection_sensor;
+    mgmt_connection_sensor.icon = "mdi:connection";
+    mgmt_connection_sensor.entity_category = "diagnostic";
+    mgmt_connection_sensor.friendly_name_suffix = "Connection Type";
+    meteo_def.sensors["/Mgmt/Connection"] = mgmt_connection_sensor;
+
+    // Error Code (device health)
+    HASensorConfig error_code_sensor;
+    error_code_sensor.icon = "mdi:alert-circle";
+    error_code_sensor.entity_category = "diagnostic";
+    error_code_sensor.friendly_name_suffix = "Error Code";
+    meteo_def.sensors["/ErrorCode"] = error_code_sensor;
+
+    // Charger Error Code (charging system health)
+    HASensorConfig chr_error_sensor;
+    chr_error_sensor.icon = "mdi:alert-circle";
+    chr_error_sensor.entity_category = "diagnostic";
+    chr_error_sensor.friendly_name_suffix = "Charger Error Code";
+    meteo_def.sensors["/ChrErrorCode"] = chr_error_sensor;
+
+    // Status (device operational status)
+    HASensorConfig status_sensor;
+    status_sensor.icon = "mdi:information";
+    status_sensor.entity_category = "diagnostic";
+    status_sensor.friendly_name_suffix = "Status";
+    meteo_def.sensors["/Status"] = status_sensor;
+
+    // Today's Yield (energy generation for today)
+    HASensorConfig todays_yield_sensor;
+    todays_yield_sensor.device_class = "energy";
+    todays_yield_sensor.state_class = "total_increasing";
+    todays_yield_sensor.unit_of_measurement = "kWh";
+    todays_yield_sensor.icon = "mdi:solar-panel";
+    todays_yield_sensor.suggested_display_precision = 2;
+    todays_yield_sensor.friendly_name_suffix = "Today's Yield";
+    meteo_def.sensors["/TodaysYield"] = todays_yield_sensor;
+
+    // Time Since Last Sun (time tracking)
+    HASensorConfig time_since_sun_sensor;
+    time_since_sun_sensor.device_class = "duration";
+    time_since_sun_sensor.state_class = "measurement";
+    time_since_sun_sensor.unit_of_measurement = "s";
+    time_since_sun_sensor.icon = "mdi:clock";
+    time_since_sun_sensor.entity_category = "diagnostic";
+    time_since_sun_sensor.friendly_name_suffix = "Time Since Last Sun";
+    meteo_def.sensors["/TimeSinceLastSun"] = time_since_sun_sensor;
+
+    // Product information (diagnostic)
+    HASensorConfig product_id_sensor;
+    product_id_sensor.icon = "mdi:identifier";
+    product_id_sensor.entity_category = "diagnostic";
+    product_id_sensor.friendly_name_suffix = "Product ID";
+    meteo_def.sensors["/ProductId"] = product_id_sensor;
+
+    // Device Instance (identification)
+    HASensorConfig device_instance_sensor;
+    device_instance_sensor.icon = "mdi:numeric";
+    device_instance_sensor.entity_category = "diagnostic";
+    device_instance_sensor.friendly_name_suffix = "Device Instance";
+    meteo_def.sensors["/DeviceInstance"] = device_instance_sensor;
+
+    // Process information (diagnostic)
+    HASensorConfig process_name_sensor;
+    process_name_sensor.icon = "mdi:application";
+    process_name_sensor.entity_category = "diagnostic";
+    process_name_sensor.friendly_name_suffix = "Process Name";
+    meteo_def.sensors["/Mgmt/ProcessName"] = process_name_sensor;
+
+    HASensorConfig process_version_sensor;
+    process_version_sensor.icon = "mdi:tag";
+    process_version_sensor.entity_category = "diagnostic";
+    process_version_sensor.friendly_name_suffix = "Process Version";
+    meteo_def.sensors["/Mgmt/ProcessVersion"] = process_version_sensor;
+
+    // Custom device name extraction for meteo sensors
+    meteo_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
+        auto custom_name = items.find("/CustomName");
+        if (custom_name != items.end()) {
+            std::string name = custom_name->second.get_value().value.as_text();
+            if (!name.empty()) return name;
+        }
+
+        auto device_name = items.find("/DeviceName");
+        if (device_name != items.end()) {
+            std::string name = device_name->second.get_value().value.as_text();
+            if (!name.empty()) return name;
+        }
+
+        auto product_name = items.find("/ProductName");
+        if (product_name != items.end()) {
+            std::string name = product_name->second.get_value().value.as_text();
+            if (!name.empty()) return name;
+        }
+
+        // Determine sensor type based on available measurements
+        bool has_irradiance = items.find("/Irradiance") != items.end();
+        bool has_temp = items.find("/CellTemperature") != items.end();
+        bool has_yield = items.find("/TodaysYield") != items.end();
+
+        if (has_irradiance && has_temp && has_yield) {
+            return "Solar Weather Station";
+        } else if (has_irradiance && has_temp) {
+            return "Solar Irradiance Sensor";
+        } else if (has_irradiance) {
+            return "Irradiance Sensor";
+        } else if (has_temp) {
+            return "Meteorological Sensor";
+        } else {
+            return "Weather Station";
+        }
+    };
+
+    service_definitions["meteo"] = std::move(meteo_def);
 }
 
 void HAServiceRegistry::registerTemperatureService()

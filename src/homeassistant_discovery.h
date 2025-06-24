@@ -121,6 +121,7 @@ private:
     void registerTankService();
     void registerGridMeterService();
     void registerSwitchService();
+    void registerMeteoService();
 
 public:
     HAServiceRegistry();
