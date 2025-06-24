@@ -150,7 +150,7 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, ServiceIdentifi
                 if (service_items_it != dbus_service_items.end()) {
                     ha_discovery.publishAllSensorsForService(service, short_service_name, service_items_it->second);
                 }
-            } 
+            }
             // Check if this is a supported sensor path for this service type
             else if (ha_discovery.isSupportedSensor(short_service_name.service_type, fully_mapped_item.get_path())) {
                 // Use full context if available for better device naming
@@ -339,23 +339,44 @@ void State::write_to_dbus(const std::string &topic, const std::string &payload)
 {
     flashmq_logf(LOG_DEBUG, "[Write] Writing '%s' to '%s'", payload.c_str(), topic.c_str());
 
-    const nlohmann::json j = nlohmann::json::parse(payload);
+    nlohmann::json json_value;
 
-    auto jpos = j.find("value");
-    if (jpos == j.end())
-        throw ValueError("Can't find 'value' in json.");
+    try {
+        const nlohmann::json j = nlohmann::json::parse(payload);
 
-    nlohmann::json::value_type json_value = *jpos;
+        auto jpos = j.find("value");
+        if (jpos != j.end()) {
+            json_value = *jpos;
+        } else {
+            // If it's a JSON object/array but no "value" key, use the whole thing
+            json_value = j;
+        }
+    } catch (const nlohmann::json::parse_error &ex) {
+        // Not valid JSON, treat as raw value
+        try {
+            if (payload.find('.') != std::string::npos) {
+                // Contains decimal point, parse as double
+                json_value = std::stod(payload);
+            } else {
+                // Try to parse as integer
+                json_value = std::stoll(payload);
+            }
+        } catch (const std::exception &ex) {
+            // Not a number, treat as string
+            json_value = payload;
+        }
+    }
 
     const Item &item = find_item_by_mqtt_path(topic);
-
     VeVariant new_value(json_value);
 
-    flashmq_logf(LOG_DEBUG, "[Write] Determined dbus type of '%s' as '%s'", json_value.dump().c_str(), new_value.get_dbus_type_as_string_recursive().c_str());
+    flashmq_logf(LOG_DEBUG, "[Write] Determined dbus type of '%s' as '%s'",
+                 json_value.dump().c_str(), new_value.get_dbus_type_as_string_recursive().c_str());
 
     std::vector<VeVariant> args;
     args.push_back(new_value);
-    dbus_uint32_t serial = call_method(item.get_service_name(), item.get_path(), "com.victronenergy.BusItem", "SetValue", args, true);
+    dbus_uint32_t serial = call_method(item.get_service_name(), item.get_path(),
+                                      "com.victronenergy.BusItem", "SetValue", args, true);
 
     auto set_value_handler = [](State *state, const std::string &topic, DBusMessage *msg) {
         const int msg_type = dbus_message_get_type(msg);
