@@ -37,22 +37,69 @@ HAEntityConfig::HAEntityConfig(const std::string &name, const std::string &uniqu
 
 std::string HAEntityConfig::toJson(const HADevice &device) const
 {
-    nlohmann::json j;
-    j["name"] = name;
-    j["unique_id"] = unique_id;
-    j["state_topic"] = state_topic;
-    j["device"] = nlohmann::json::parse(device.toJson());
+	    nlohmann::json config_json;
 
-    if (!value_template.empty()) j["value_template"] = value_template;
-    if (!unit_of_measurement.empty()) j["unit_of_measurement"] = unit_of_measurement;
-    if (!device_class.empty()) j["device_class"] = device_class;
-    if (!state_class.empty()) j["state_class"] = state_class;
-    if (!icon.empty()) j["icon"] = icon;
-    if (!entity_category.empty()) j["entity_category"] = entity_category;
-    if (!enabled_by_default) j["enabled_by_default"] = enabled_by_default;
-    if (suggested_display_precision >= 0) j["suggested_display_precision"] = suggested_display_precision;
+    config_json["name"] = name;
+    config_json["unique_id"] = unique_id;
+    config_json["state_topic"] = state_topic;
+    config_json["device"] = nlohmann::json::parse(device.toJson());
 
-    return j.dump();
+    if (!value_template.empty()) {
+        config_json["value_template"] = value_template;
+    }
+
+    if (!unit_of_measurement.empty()) {
+        config_json["unit_of_measurement"] = unit_of_measurement;
+    }
+
+    if (!device_class.empty()) {
+        config_json["device_class"] = device_class;
+    }
+
+    if (!state_class.empty() && state_class != "None") {
+        config_json["state_class"] = state_class;
+    }
+
+    if (!icon.empty()) {
+        config_json["icon"] = icon;
+    }
+
+    if (!entity_category.empty()) {
+        config_json["entity_category"] = entity_category;
+    }
+
+    config_json["enabled_by_default"] = enabled_by_default;
+
+    if (suggested_display_precision >= 0) {
+        config_json["suggested_display_precision"] = suggested_display_precision;
+    }
+
+    // NEW: Add command support for controllable entities
+    if (!command_topic.empty()) {
+        config_json["command_topic"] = command_topic;
+
+        // For switch entities
+        if (!payload_on.empty()) {
+            config_json["payload_on"] = payload_on;
+        }
+        if (!payload_off.empty()) {
+            config_json["payload_off"] = payload_off;
+        }
+
+        // For number entities (dimmers)
+        if (min_value != 0 || max_value != 100) {
+            config_json["min"] = min_value;
+            config_json["max"] = max_value;
+        }
+        if (!mode.empty()) {
+            config_json["mode"] = mode;
+        }
+
+        config_json["optimistic"] = optimistic;
+    }
+
+    return config_json.dump();
+
 }
 
 HAServiceRegistry::HAServiceRegistry()
@@ -993,6 +1040,14 @@ HAEntityConfig HomeAssistantDiscovery::createEntityConfig(const Item &item,
     config.enabled_by_default = sensor_config.enabled_by_default;
     config.suggested_display_precision = sensor_config.suggested_display_precision;
 
+    config.command_topic = sensor_config.command_topic;
+    config.payload_on = sensor_config.payload_on;
+    config.payload_off = sensor_config.payload_off;
+    config.optimistic = sensor_config.optimistic;
+    config.min_value = sensor_config.min_value;
+    config.max_value = sensor_config.max_value;
+    config.mode = sensor_config.mode;
+
     return config;
 }
 
@@ -1039,7 +1094,7 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
         // Handle dynamic switch configurations
         HASensorConfig dynamic_config;
         if (!sensor_config && short_service_name.service_type == "switch") {
-            dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+            dynamic_config = createDynamicSwitchSensorConfig(item.get_path(), short_service_name);
             sensor_config = &dynamic_config;
         }
 
@@ -1102,7 +1157,7 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         // Handle dynamic switch configurations
         HASensorConfig dynamic_config;
         if (!sensor_config && short_service_name.service_type == "switch") {
-            dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+            dynamic_config = createDynamicSwitchSensorConfig(item.get_path(), short_service_name);
             sensor_config = &dynamic_config;
         }
 
@@ -1165,7 +1220,7 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
                 component = sensor_config->component;
             } else if (short_service_name.service_type == "switch") {
                 // Handle dynamic switch configuration
-                HASensorConfig dynamic_config = createDynamicSwitchSensorConfig(item.get_path());
+                HASensorConfig dynamic_config = createDynamicSwitchSensorConfig(item.get_path(), short_service_name);
                 component = dynamic_config.component;
             }
 
@@ -1232,7 +1287,8 @@ bool HomeAssistantDiscovery::isSwitchOutputPath(const std::string &dbus_path) co
     return false;
 }
 
-HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std::string &dbus_path) const
+HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std::string &dbus_path,
+                                                                       const ShortServiceName &short_service_name) const
 {
     HASensorConfig config;
 
@@ -1268,19 +1324,25 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
         }
 
         if (property == "State") {
-            config.component = "binary_sensor";
-            config.device_class = "power";
+            config.component = "switch";
+            config.device_class = "switch";
+
+			config.command_topic = "W/" + vrm_id + "/" + short_service_name + dbus_path;
+            config.payload_on = "{\"value\": 1}";
+            config.payload_off = "{\"value\": 0}";
+            config.optimistic = false; // Wait for state feedback
+
             config.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
 
             if (output_type == "output") {
                 config.icon = "mdi:electric-switch";
-                config.friendly_name_suffix = "Output " + output_number + " State";
+                config.friendly_name_suffix = "Output " + output_number;
             } else if (output_type == "pwm") {
                 config.icon = "mdi:sine-wave";
-                config.friendly_name_suffix = "PWM " + output_number + " State";
+                config.friendly_name_suffix = "PWM " + output_number;
             } else if (output_type == "relay") {
                 config.icon = "mdi:relay";
-                config.friendly_name_suffix = "Relay " + output_number + " State";
+                config.friendly_name_suffix = "Relay " + output_number;
             }
         }
         else if (property == "Status") {
@@ -1297,11 +1359,18 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
             }
         }
         else if (property == "Dimming" && output_type == "pwm") {
+            config.component = "number";
             config.state_class = "measurement";
             config.unit_of_measurement = "%";
             config.icon = "mdi:brightness-percent";
             config.suggested_display_precision = 0;
             config.friendly_name_suffix = "PWM " + output_number + " Dimming";
+
+            config.command_topic = "W/" + vrm_id + "/" + short_service_name + dbus_path;
+            config.min_value = 0;
+            config.max_value = 100;
+            config.mode = "slider";
+            config.optimistic = false; // Wait for state feedback
         }
     }
 

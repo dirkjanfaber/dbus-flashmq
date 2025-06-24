@@ -25,7 +25,7 @@ struct HADevice
     std::string identifiers;
     std::string sw_version;
     std::string configuration_url;
-	std::string via_device;
+    std::string via_device;
 
     HADevice() = default;
     HADevice(const std::string &name, const std::string &model, const std::string &identifier);
@@ -47,9 +47,15 @@ struct HASensorConfig
     bool enabled_by_default = true;
     int suggested_display_precision = -1;
     std::string value_template = "{{ value_json.value }}";
-
-    // For friendly entity names
     std::string friendly_name_suffix;          // e.g., "Voltage", "Power"
+
+    std::string command_topic;
+    std::string payload_on = "1";
+    std::string payload_off = "0";
+    bool optimistic = false;
+    int min_value = 0;
+    int max_value = 100;
+    std::string mode = "slider";
 };
 
 /**
@@ -84,6 +90,14 @@ struct HAEntityConfig
     std::string entity_category;
     bool enabled_by_default = true;
     int suggested_display_precision = -1;
+
+    std::string command_topic;
+    std::string payload_on = "1";
+    std::string payload_off = "0";
+    bool optimistic = false;
+    int min_value = 0;
+    int max_value = 100;
+    std::string mode = "slider";
 
     HAEntityConfig() = default;
     HAEntityConfig(const std::string &name, const std::string &unique_id, const std::string &state_topic);
@@ -139,13 +153,13 @@ private:
     std::unordered_map<std::string, HAEntityConfig> published_entities;
 
     // Helper methods
-	std::string extractDeviceNameFromService(const std::string &full_service_name) const;
-	std::string createDeviceIdentifier(const ShortServiceName &short_service_name,
+    std::string extractDeviceNameFromService(const std::string &full_service_name) const;
+    std::string createDeviceIdentifier(const ShortServiceName &short_service_name,
                                       const std::string &full_service_name = "") const;
-	std::string createEntityId(const ShortServiceName &short_service_name,
+    std::string createEntityId(const ShortServiceName &short_service_name,
                           const std::string &dbus_path,
                           const std::string &full_service_name = "") const;
-	std::string createDiscoveryTopic(const std::string &component,
+    std::string createDiscoveryTopic(const std::string &component,
                                 const std::string &device_id,
                                 const std::string &object_id) const;
     std::string sanitizeForHA(const std::string &input) const;
@@ -161,7 +175,7 @@ private:
                                     const std::string &device_name) const;
 
     bool isServiceEnabled(const std::string& service_type) const;
-	void ensureGXSystemDevice();
+    void ensureGXSystemDevice();
 
 public:
     HomeAssistantDiscovery();
@@ -178,8 +192,8 @@ public:
     // Core sensor support
     bool isSupportedSensor(const std::string &service_type, const std::string &dbus_path) const;
     bool isSwitchOutputPath(const std::string &dbus_path) const;
-    HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path) const;
-
+    HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path,
+                                             const ShortServiceName &short_service_name) const;
     void publishSensorEntity(const Item &item, const ShortServiceName &short_service_name);
     void publishSensorEntityWithItems(const Item &item,
                                      const ShortServiceName &short_service_name,
