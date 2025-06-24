@@ -152,22 +152,6 @@ void HAServiceRegistry::registerMeteoService()
     battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
     meteo_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
 
-    // Connection status (connectivity indicator)
-    HASensorConfig connection_sensor;
-    connection_sensor.component = "binary_sensor";
-    connection_sensor.device_class = "connectivity";
-    connection_sensor.icon = "mdi:wifi";
-    connection_sensor.friendly_name_suffix = "Connected";
-    connection_sensor.value_template = "{{ 'ON' if value_json.value == 1 else 'OFF' }}";
-    meteo_def.sensors["/Connected"] = connection_sensor;
-
-    // Management Connection (communication method)
-    HASensorConfig mgmt_connection_sensor;
-    mgmt_connection_sensor.icon = "mdi:connection";
-    mgmt_connection_sensor.entity_category = "diagnostic";
-    mgmt_connection_sensor.friendly_name_suffix = "Connection Type";
-    meteo_def.sensors["/Mgmt/Connection"] = mgmt_connection_sensor;
-
     // Error Code (device health)
     HASensorConfig error_code_sensor;
     error_code_sensor.icon = "mdi:alert-circle";
@@ -209,32 +193,12 @@ void HAServiceRegistry::registerMeteoService()
     time_since_sun_sensor.friendly_name_suffix = "Time Since Last Sun";
     meteo_def.sensors["/TimeSinceLastSun"] = time_since_sun_sensor;
 
-    // Product information (diagnostic)
-    HASensorConfig product_id_sensor;
-    product_id_sensor.icon = "mdi:identifier";
-    product_id_sensor.entity_category = "diagnostic";
-    product_id_sensor.friendly_name_suffix = "Product ID";
-    meteo_def.sensors["/ProductId"] = product_id_sensor;
-
     // Device Instance (identification)
     HASensorConfig device_instance_sensor;
     device_instance_sensor.icon = "mdi:numeric";
     device_instance_sensor.entity_category = "diagnostic";
     device_instance_sensor.friendly_name_suffix = "Device Instance";
     meteo_def.sensors["/DeviceInstance"] = device_instance_sensor;
-
-    // Process information (diagnostic)
-    HASensorConfig process_name_sensor;
-    process_name_sensor.icon = "mdi:application";
-    process_name_sensor.entity_category = "diagnostic";
-    process_name_sensor.friendly_name_suffix = "Process Name";
-    meteo_def.sensors["/Mgmt/ProcessName"] = process_name_sensor;
-
-    HASensorConfig process_version_sensor;
-    process_version_sensor.icon = "mdi:tag";
-    process_version_sensor.entity_category = "diagnostic";
-    process_version_sensor.friendly_name_suffix = "Process Version";
-    meteo_def.sensors["/Mgmt/ProcessVersion"] = process_version_sensor;
 
     // Custom device name extraction for meteo sensors
     meteo_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
@@ -865,17 +829,6 @@ void HAServiceRegistry::registerSwitchService()
     switch_def.friendly_name = "Switch Device";
     switch_def.model_name = "Victron Switch";
 
-    // Device-level status
-    HASensorConfig connected_sensor;
-    connected_sensor.component = "binary_sensor";
-    connected_sensor.device_class = "connectivity";
-    connected_sensor.icon = "mdi:connection";
-    connected_sensor.entity_category = "diagnostic";
-	connected_sensor.enabled_by_default = false;
-    connected_sensor.friendly_name_suffix = "Connected";
-    connected_sensor.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
-    switch_def.sensors["/Connected"] = connected_sensor;
-
     HASensorConfig device_state_sensor;
     device_state_sensor.icon = "mdi:power-settings";
     device_state_sensor.entity_category = "diagnostic";
@@ -1438,7 +1391,7 @@ void HomeAssistantDiscovery::publishAllSensorsForService(const std::string &serv
 
 bool HomeAssistantDiscovery::isSwitchOutputPath(const std::string &dbus_path) const
 {
-    if (dbus_path == "/Connected" || dbus_path == "/State") {
+    if (dbus_path == "/State") {
         return true;
     }
 
@@ -1455,16 +1408,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
 {
     HASensorConfig config;
 
-    if (dbus_path == "/Connected") {
-        config.component = "binary_sensor";
-        config.device_class = "connectivity";
-        config.icon = "mdi:connection";
-        config.entity_category = "diagnostic";
-		config.enabled_by_default = false;
-        config.friendly_name_suffix = "Connected";
-        config.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
-    }
-    else if (dbus_path == "/State") {
+    if (dbus_path == "/State") {
         config.icon = "mdi:power-settings";
         config.entity_category = "diagnostic";
         config.friendly_name_suffix = "Device State";
