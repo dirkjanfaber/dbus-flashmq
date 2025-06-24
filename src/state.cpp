@@ -342,28 +342,32 @@ void State::write_to_dbus(const std::string &topic, const std::string &payload)
     nlohmann::json json_value;
 
     try {
+        // Try to parse as JSON first
         const nlohmann::json j = nlohmann::json::parse(payload);
 
-        auto jpos = j.find("value");
-        if (jpos != j.end()) {
+        if (j.is_object()) {
+            // It's a JSON object - STRICT: Always require "value" key (like original code)
+            auto jpos = j.find("value");
+            if (jpos == j.end())
+                throw ValueError("Can't find 'value' in json.");
+
             json_value = *jpos;
         } else {
-            // If it's a JSON object/array but no "value" key, use the whole thing
+            // It's a primitive JSON value (number, string, boolean) - use directly
+            // This handles HA number component sending raw numbers like 75
             json_value = j;
         }
+
     } catch (const nlohmann::json::parse_error &ex) {
-        // Not valid JSON, treat as raw value
+        // Not valid JSON - shouldn't happen with modern HA, but handle anyway
         try {
-            if (payload.find('.') != std::string::npos) {
-                // Contains decimal point, parse as double
+            json_value = std::stoll(payload);
+        } catch (const std::exception &int_ex) {
+            try {
                 json_value = std::stod(payload);
-            } else {
-                // Try to parse as integer
-                json_value = std::stoll(payload);
+            } catch (const std::exception &dbl_ex) {
+                json_value = payload;
             }
-        } catch (const std::exception &ex) {
-            // Not a number, treat as string
-            json_value = payload;
         }
     }
 
