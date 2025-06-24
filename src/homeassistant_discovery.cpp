@@ -708,6 +708,7 @@ void HAServiceRegistry::registerSwitchService()
     connected_sensor.device_class = "connectivity";
     connected_sensor.icon = "mdi:connection";
     connected_sensor.entity_category = "diagnostic";
+	connected_sensor.enabled_by_default = false;
     connected_sensor.friendly_name_suffix = "Connected";
     connected_sensor.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
     switch_def.sensors["/Connected"] = connected_sensor;
@@ -716,7 +717,7 @@ void HAServiceRegistry::registerSwitchService()
     device_state_sensor.icon = "mdi:power-settings";
     device_state_sensor.entity_category = "diagnostic";
     device_state_sensor.friendly_name_suffix = "Device State";
-    device_state_sensor.value_template = "{% set states = {0: 'Off', 1: 'On', 2: 'Error'} %}{{ states[value_json.value] | default('Unknown') }}";
+	device_state_sensor.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
     switch_def.sensors["/State"] = device_state_sensor;
 
     // Custom device name extraction
@@ -1280,7 +1281,6 @@ bool HomeAssistantDiscovery::isSwitchOutputPath(const std::string &dbus_path) co
 
     if (dbus_path.find("/SwitchableOutput/") == 0) {
         return (dbus_path.find("/State") != std::string::npos ||
-                dbus_path.find("/Status") != std::string::npos ||
                 dbus_path.find("/Dimming") != std::string::npos);
     }
 
@@ -1297,6 +1297,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
         config.device_class = "connectivity";
         config.icon = "mdi:connection";
         config.entity_category = "diagnostic";
+		config.enabled_by_default = false;
         config.friendly_name_suffix = "Connected";
         config.value_template = "{% if value_json.value == 1 %}ON{% else %}OFF{% endif %}";
     }
@@ -1304,7 +1305,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
         config.icon = "mdi:power-settings";
         config.entity_category = "diagnostic";
         config.friendly_name_suffix = "Device State";
-        config.value_template = "{% set states = {0: 'Off', 1: 'On', 2: 'Error'} %}{{ states[value_json.value] | default('Unknown') }}";
+		config.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
     }
     else if (dbus_path.find("/SwitchableOutput/") == 0) {
         // Parse the output type and number
@@ -1343,19 +1344,6 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
             } else if (output_type == "relay") {
                 config.icon = "mdi:relay";
                 config.friendly_name_suffix = "Relay " + output_number;
-            }
-        }
-        else if (property == "Status") {
-            config.icon = "mdi:information";
-            config.entity_category = "diagnostic";
-            config.value_template = "{% set statuses = {0: 'OK', 1: 'Error'} %}{{ statuses[value_json.value] | default('Unknown') }}";
-
-            if (output_type == "output") {
-                config.friendly_name_suffix = "Output " + output_number + " Status";
-            } else if (output_type == "pwm") {
-                config.friendly_name_suffix = "PWM " + output_number + " Status";
-            } else if (output_type == "relay") {
-                config.friendly_name_suffix = "Relay " + output_number + " Status";
             }
         }
         else if (property == "Dimming" && output_type == "pwm") {
