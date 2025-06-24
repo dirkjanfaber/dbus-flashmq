@@ -523,6 +523,16 @@ void HAServiceRegistry::registerTankService()
     remaining_sensor.friendly_name_suffix = "Remaining";
     tank_def.sensors["/Remaining"] = remaining_sensor;
 
+	HASensorConfig battery_voltage_sensor;
+    battery_voltage_sensor.device_class = "voltage";
+    battery_voltage_sensor.state_class = "measurement";
+    battery_voltage_sensor.unit_of_measurement = "V";
+    battery_voltage_sensor.icon = "mdi:battery";
+    battery_voltage_sensor.suggested_display_precision = 3;
+    battery_voltage_sensor.entity_category = "diagnostic";
+    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
+    tank_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
+
     // Custom device name for tanks (often have meaningful names)
     tank_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
         auto custom_name = items.find("/CustomName");
