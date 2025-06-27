@@ -1284,6 +1284,9 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         return;
     }
 
+    flashmq_logf(LOG_DEBUG, "Processing Home Assistant discovery for: %s%s",
+                 short_service_name.c_str(), item.get_path().c_str());
+
     try {
         const HAServiceDefinition* service_def = service_registry.getServiceDefinition(short_service_name.service_type);
         const HASensorConfig* sensor_config = service_registry.getSensorConfig(short_service_name.service_type, item.get_path());
@@ -1296,56 +1299,43 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         }
 
         if (!service_def || !sensor_config) {
+            flashmq_logf(LOG_ERR, "No service definition or sensor config found for %s%s",
+                         short_service_name.service_type.c_str(), item.get_path().c_str());
             return;
         }
 
+        // Create/update device with proper name using all available items
         std::string device_id = createDeviceIdentifier(short_service_name, item.get_service_name());
-        std::string entity_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
+        HADevice device = createDevice(short_service_name, service_def, &all_items);
 
-        // Check if device exists and needs updating
-        bool device_updated = false;
-        auto device_it = published_devices.find(device_id);
-        if (device_it == published_devices.end()) {
-            // New device - create it
-            HADevice device = createDevice(short_service_name, service_def, &all_items);
-            published_devices[device_id] = device;
-            device_updated = true;
-            flashmq_logf(LOG_DEBUG, "Created new HA device: %s", device.name.c_str());
+        // Always update device in case name changed
+        published_devices[device_id] = device;
+
+        // Create entity configuration
+        HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
+        std::string entity_id = config.unique_id;
+
+        // Create discovery topic and payload
+        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
+        std::string payload = config.toJson(device);
+
+        // Only publish if payload actually changed (this prevents flooding!)
+        if (needsDiscoveryUpdate(entity_id, payload)) {
+            flashmq_publish_message(discovery_topic, 0, true, payload); // retained = true for discovery
+
+            // Cache the published entity and payload
+            published_entities[entity_id] = config;
+            cached_discovery_payloads[entity_id] = payload;
+
+            flashmq_logf(LOG_INFO, "Published Home Assistant discovery for %s: %s (device: %s, component: %s)",
+                         sensor_config->component.c_str(), config.name.c_str(), device.name.c_str(), sensor_config->component.c_str());
+            flashmq_logf(LOG_DEBUG, "Discovery topic: %s", discovery_topic.c_str());
         } else {
-            // Check if device name changed (CustomName/ProductName updates)
-            HADevice updated_device = createDevice(short_service_name, service_def, &all_items);
-            if (device_it->second.name != updated_device.name) {
-                published_devices[device_id] = updated_device;
-                device_updated = true;
-                flashmq_logf(LOG_DEBUG, "Updated HA device name: %s", updated_device.name.c_str());
-            }
-        }
-
-        // Only publish discovery if device was updated OR entity doesn't exist
-        auto entity_it = published_entities.find(entity_id);
-        if (device_updated || entity_it == published_entities.end()) {
-
-            HADevice &device = published_devices[device_id];
-            HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
-
-            std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
-            std::string payload = config.toJson(device);
-
-            // Check if payload actually changed
-            if (needsDiscoveryUpdate(entity_id, payload)) {
-                flashmq_publish_message(discovery_topic, 0, true, payload);
-                published_entities[entity_id] = config;
-                cached_discovery_payloads[entity_id] = payload;
-
-                flashmq_logf(LOG_INFO, "Published HA discovery for sensor: %s (device: %s)",
-                           config.name.c_str(), device.name.c_str());
-            } else {
-                flashmq_logf(LOG_DEBUG, "Skipping HA discovery - no changes for sensor: %s", entity_id.c_str());
-            }
+            flashmq_logf(LOG_DEBUG, "Skipping HA discovery - no changes for: %s", entity_id.c_str());
         }
 
     } catch (const std::exception &ex) {
-        flashmq_logf(LOG_ERR, "Error publishing HA discovery for sensor: %s", ex.what());
+        flashmq_logf(LOG_ERR, "Error publishing Home Assistant discovery for sensor: %s", ex.what());
     }
 }
 
@@ -1598,6 +1588,7 @@ void HomeAssistantDiscovery::clearAll()
 
     published_entities.clear();
     published_devices.clear();
+	cached_discovery_payloads.clear();
 
     flashmq_logf(LOG_INFO, "Cleared all Home Assistant discovery entities");
 }
