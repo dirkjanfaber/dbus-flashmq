@@ -139,30 +139,25 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, ServiceIdentifi
     if (this->alive || fully_mapped_item.should_be_retained() || force_publish)
         fully_mapped_item.publish();
 
-    // Home Assistant Discovery integration
+    // Home Assistant Discovery integration - ONLY on specific triggers
     if (ha_discovery.isEnabled()) {
         try {
             ShortServiceName short_service_name(service, instance);
 
-            // Handle device name updates - these require republishing all sensors with updated device info
-            if (fully_mapped_item.get_path() == "/CustomName" || fully_mapped_item.get_path() == "/ProductName") {
+            // CRITICAL FIX: Only publish discovery for device name changes and new entities
+            if (fully_mapped_item.get_path() == "/CustomName" ||
+                fully_mapped_item.get_path() == "/ProductName") {
+                // Device name changed - republish ALL sensors for this service
                 auto service_items_it = dbus_service_items.find(service);
                 if (service_items_it != dbus_service_items.end()) {
                     ha_discovery.publishAllSensorsForService(service, short_service_name, service_items_it->second);
                 }
             }
-            // Check if this is a supported sensor path for this service type
-            else if (ha_discovery.isSupportedSensor(short_service_name.service_type, fully_mapped_item.get_path())) {
-                // Use full context if available for better device naming
-                auto service_items_it = dbus_service_items.find(service);
-                if (service_items_it != dbus_service_items.end()) {
-                    ha_discovery.publishSensorEntityWithItems(fully_mapped_item, short_service_name, service_items_it->second);
-                } else {
-                    ha_discovery.publishSensorEntity(fully_mapped_item, short_service_name);
-                }
-            }
+            // For regular sensor values - DON'T republish discovery every time!
+            // Discovery should only be published once per entity unless device info changes
+
         } catch (const std::exception &ex) {
-            flashmq_logf(LOG_ERR, "Error publishing HA discovery for %s%s: %s",
+            flashmq_logf(LOG_ERR, "Error in HA discovery for %s%s: %s",
                          service.c_str(), fully_mapped_item.get_path().c_str(), ex.what());
         }
     }

@@ -177,6 +177,7 @@ private:
 
     bool isServiceEnabled(const std::string& service_type) const;
     void ensureGXSystemDevice();
+    std::unordered_map<std::string, std::string> cached_discovery_payloads;
 
 public:
     HomeAssistantDiscovery();
@@ -209,6 +210,8 @@ public:
                                   const std::unordered_map<std::string, Item> &all_items);
 
     void clearAll();
+    bool needsDiscoveryUpdate(const std::string& entity_id, const std::string& new_payload);
+
 };
 
 }

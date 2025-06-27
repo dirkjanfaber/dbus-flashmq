@@ -363,6 +363,26 @@ void HAServiceRegistry::registerBatteryService()
     current_sensor.friendly_name_suffix = "Current";
     battery_def.sensors["/Dc/0/Current"] = current_sensor;
 
+    // Total energy consumed from battery (discharge)
+    HASensorConfig energy_consumed;
+    energy_consumed.device_class = "energy";
+    energy_consumed.state_class = "total_increasing";
+    energy_consumed.unit_of_measurement = "kWh";
+    energy_consumed.icon = "mdi:battery-minus";
+    energy_consumed.suggested_display_precision = 2;
+    energy_consumed.friendly_name_suffix = "Energy Consumed";
+    battery_def.sensors["/History/DischargedEnergy"] = energy_consumed;
+
+    // Total energy charged to battery
+    HASensorConfig energy_charged;
+    energy_charged.device_class = "energy";
+    energy_charged.state_class = "total_increasing";
+    energy_charged.unit_of_measurement = "kWh";
+    energy_charged.icon = "mdi:battery-plus";
+    energy_charged.suggested_display_precision = 2;
+    energy_charged.friendly_name_suffix = "Energy Charged";
+    battery_def.sensors["/History/ChargedEnergy"] = energy_charged;
+
     // Battery power
     HASensorConfig power_sensor;
     power_sensor.device_class = "power";
@@ -1264,9 +1284,6 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         return;
     }
 
-    flashmq_logf(LOG_DEBUG, "Publishing Home Assistant discovery for sensor with items: %s%s",
-                 short_service_name.c_str(), item.get_path().c_str());
-
     try {
         const HAServiceDefinition* service_def = service_registry.getServiceDefinition(short_service_name.service_type);
         const HASensorConfig* sensor_config = service_registry.getSensorConfig(short_service_name.service_type, item.get_path());
@@ -1279,39 +1296,66 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         }
 
         if (!service_def || !sensor_config) {
-            flashmq_logf(LOG_ERR, "No service definition or sensor config found for %s%s",
-                         short_service_name.service_type.c_str(), item.get_path().c_str());
             return;
         }
 
-        // Create/update device with proper name using all available items
         std::string device_id = createDeviceIdentifier(short_service_name, item.get_service_name());
-        HADevice device = createDevice(short_service_name, service_def, &all_items);
-        published_devices[device_id] = device;  // Always update the device
+        std::string entity_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
 
-        flashmq_logf(LOG_DEBUG, "Created/Updated HA device: %s", device.name.c_str());
+        // Check if device exists and needs updating
+        bool device_updated = false;
+        auto device_it = published_devices.find(device_id);
+        if (device_it == published_devices.end()) {
+            // New device - create it
+            HADevice device = createDevice(short_service_name, service_def, &all_items);
+            published_devices[device_id] = device;
+            device_updated = true;
+            flashmq_logf(LOG_DEBUG, "Created new HA device: %s", device.name.c_str());
+        } else {
+            // Check if device name changed (CustomName/ProductName updates)
+            HADevice updated_device = createDevice(short_service_name, service_def, &all_items);
+            if (device_it->second.name != updated_device.name) {
+                published_devices[device_id] = updated_device;
+                device_updated = true;
+                flashmq_logf(LOG_DEBUG, "Updated HA device name: %s", updated_device.name.c_str());
+            }
+        }
 
-        // Create entity configuration
-        HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
-        std::string entity_id = config.unique_id;
+        // Only publish discovery if device was updated OR entity doesn't exist
+        auto entity_it = published_entities.find(entity_id);
+        if (device_updated || entity_it == published_entities.end()) {
 
-        // Create discovery topic and payload - NOW WITH DEVICE ID
-        std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
-        std::string payload = config.toJson(device);
+            HADevice &device = published_devices[device_id];
+            HAEntityConfig config = createEntityConfig(item, short_service_name, *sensor_config, device.name);
 
-        // Publish to MQTT
-        flashmq_publish_message(discovery_topic, 0, true, payload); // retained = true for discovery
+            std::string discovery_topic = createDiscoveryTopic(sensor_config->component, device_id, entity_id);
+            std::string payload = config.toJson(device);
 
-        // Cache the published entity
-        published_entities[entity_id] = config;
+            // Check if payload actually changed
+            if (needsDiscoveryUpdate(entity_id, payload)) {
+                flashmq_publish_message(discovery_topic, 0, true, payload);
+                published_entities[entity_id] = config;
+                cached_discovery_payloads[entity_id] = payload;
 
-        flashmq_logf(LOG_INFO, "Published Home Assistant discovery for sensor: %s (device: %s)",
-                     config.name.c_str(), device.name.c_str());
-        flashmq_logf(LOG_DEBUG, "Discovery topic: %s", discovery_topic.c_str());
+                flashmq_logf(LOG_INFO, "Published HA discovery for sensor: %s (device: %s)",
+                           config.name.c_str(), device.name.c_str());
+            } else {
+                flashmq_logf(LOG_DEBUG, "Skipping HA discovery - no changes for sensor: %s", entity_id.c_str());
+            }
+        }
 
     } catch (const std::exception &ex) {
-        flashmq_logf(LOG_ERR, "Error publishing Home Assistant discovery for sensor: %s", ex.what());
+        flashmq_logf(LOG_ERR, "Error publishing HA discovery for sensor: %s", ex.what());
     }
+}
+
+// New method implementation
+bool HomeAssistantDiscovery::needsDiscoveryUpdate(const std::string& entity_id, const std::string& new_payload) {
+    auto it = cached_discovery_payloads.find(entity_id);
+    if (it == cached_discovery_payloads.end()) {
+        return true; // First time publishing
+    }
+    return it->second != new_payload; // Only publish if payload changed
 }
 
 void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortServiceName &short_service_name)
