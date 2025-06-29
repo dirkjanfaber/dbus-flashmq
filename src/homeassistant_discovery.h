@@ -111,6 +111,16 @@ struct HAEntityConfig
 class HAServiceRegistry
 {
 private:
+    struct DiagnosticSensorDef {
+        std::string dbus_path;
+        std::string icon;
+        std::string friendly_name_suffix;
+        std::string device_class = "";     // Optional
+        std::string unit_of_measurement = ""; // Optional
+        std::string value_template = "";   // Optional for state mapping
+        int suggested_display_precision = -1; // -1 means not set
+    };
+
     std::unordered_map<std::string, HAServiceDefinition> service_definitions;
 
     void registerTemperatureService();
@@ -122,6 +132,10 @@ private:
     void registerGridMeterService();
     void registerSwitchService();
     void registerMeteoService();
+
+    void addCommonDiagnosticSensors(HAServiceDefinition& service_def) const;
+    void addDiagnosticSensor(HAServiceDefinition& service_def, const DiagnosticSensorDef& diag_def) const;
+    std::vector<DiagnosticSensorDef> getCommonDiagnostics() const;
 
 public:
     HAServiceRegistry();

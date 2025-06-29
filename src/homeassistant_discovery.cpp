@@ -30,6 +30,96 @@ std::string HADevice::toJson() const
     return j.dump();
 }
 
+std::vector<HAServiceRegistry::DiagnosticSensorDef> HAServiceRegistry::getCommonDiagnostics() const
+{
+    return {
+        // Device Instance - Universal identifier
+        {
+            .dbus_path = "/DeviceInstance",
+            .icon = "mdi:numeric",
+            .friendly_name_suffix = "Device Instance"
+        },
+
+        // Error Code - Common error reporting
+        {
+            .dbus_path = "/ErrorCode",
+            .icon = "mdi:alert-circle",
+            .friendly_name_suffix = "Error Code"
+        },
+
+        // Status - Device operational status
+        {
+            .dbus_path = "/Status",
+            .icon = "mdi:information",
+            .friendly_name_suffix = "Status"
+        },
+
+        // State - Device state (different from Status)
+        {
+            .dbus_path = "/State",
+            .icon = "mdi:power-settings",
+            .friendly_name_suffix = "Device State"
+        },
+
+        // Firmware version
+        {
+            .dbus_path = "/FirmwareVersion",
+            .icon = "mdi:chip",
+            .friendly_name_suffix = "Firmware Version"
+        },
+
+        // Hardware version
+        {
+            .dbus_path = "/HardwareVersion",
+            .icon = "mdi:memory",
+            .friendly_name_suffix = "Hardware Version"
+        },
+
+        // Serial number
+        {
+            .dbus_path = "/Serial",
+            .icon = "mdi:barcode",
+            .friendly_name_suffix = "Serial Number"
+        }
+    };
+}
+
+void HAServiceRegistry::addDiagnosticSensor(HAServiceDefinition& service_def, const DiagnosticSensorDef& diag_def) const
+{
+    HASensorConfig sensor;
+    sensor.icon = diag_def.icon;
+    sensor.entity_category = "diagnostic";
+    sensor.friendly_name_suffix = diag_def.friendly_name_suffix;
+
+    // Set optional properties if specified
+    if (!diag_def.device_class.empty()) {
+        sensor.device_class = diag_def.device_class;
+    }
+
+    if (!diag_def.unit_of_measurement.empty()) {
+        sensor.unit_of_measurement = diag_def.unit_of_measurement;
+        sensor.state_class = "measurement"; // Assume measurement if has unit
+    }
+
+    if (!diag_def.value_template.empty()) {
+        sensor.value_template = diag_def.value_template;
+    }
+
+    if (diag_def.suggested_display_precision >= 0) {
+        sensor.suggested_display_precision = diag_def.suggested_display_precision;
+    }
+
+    service_def.sensors[diag_def.dbus_path] = sensor;
+}
+
+void HAServiceRegistry::addCommonDiagnosticSensors(HAServiceDefinition& service_def) const
+{
+    // Add all common diagnostic sensors
+    for (const auto& diag_def : getCommonDiagnostics()) {
+        addDiagnosticSensor(service_def, diag_def);
+    }
+}
+
 HAEntityConfig::HAEntityConfig(const std::string &name, const std::string &unique_id, const std::string &state_topic)
     : name(name), unique_id(unique_id), state_topic(state_topic)
 {
@@ -141,37 +231,16 @@ void HAServiceRegistry::registerMeteoService()
     irradiance_sensor.friendly_name_suffix = "Solar Irradiance";
     meteo_def.sensors["/Irradiance"] = irradiance_sensor;
 
-    // Battery Voltage (sensor power)
-    HASensorConfig battery_voltage_sensor;
-    battery_voltage_sensor.device_class = "voltage";
-    battery_voltage_sensor.state_class = "measurement";
-    battery_voltage_sensor.unit_of_measurement = "V";
-    battery_voltage_sensor.icon = "mdi:battery";
-    battery_voltage_sensor.suggested_display_precision = 2;
-    battery_voltage_sensor.entity_category = "diagnostic";
-    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
-    meteo_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
+    addDiagnosticSensor(meteo_def, {
+        .dbus_path = "/BatteryVoltage",
+        .icon = "mdi:battery",
+        .friendly_name_suffix = "Battery Voltage",
+        .device_class = "voltage",
+        .unit_of_measurement = "V",
+        .suggested_display_precision = 3
+    });
 
-    // Error Code (device health)
-    HASensorConfig error_code_sensor;
-    error_code_sensor.icon = "mdi:alert-circle";
-    error_code_sensor.entity_category = "diagnostic";
-    error_code_sensor.friendly_name_suffix = "Error Code";
-    meteo_def.sensors["/ErrorCode"] = error_code_sensor;
-
-    // Charger Error Code (charging system health)
-    HASensorConfig chr_error_sensor;
-    chr_error_sensor.icon = "mdi:alert-circle";
-    chr_error_sensor.entity_category = "diagnostic";
-    chr_error_sensor.friendly_name_suffix = "Charger Error Code";
-    meteo_def.sensors["/ChrErrorCode"] = chr_error_sensor;
-
-    // Status (device operational status)
-    HASensorConfig status_sensor;
-    status_sensor.icon = "mdi:information";
-    status_sensor.entity_category = "diagnostic";
-    status_sensor.friendly_name_suffix = "Status";
-    meteo_def.sensors["/Status"] = status_sensor;
+    addCommonDiagnosticSensors(meteo_def);
 
     // Today's Yield (energy generation for today)
     HASensorConfig todays_yield_sensor;
@@ -277,18 +346,17 @@ void HAServiceRegistry::registerTemperatureService()
     pressure_sensor.friendly_name_suffix = "Pressure";
     temp_def.sensors["/Pressure"] = pressure_sensor;
 
-    // Define the battery voltage sensor (for devices like Ruuvi)
-    HASensorConfig battery_voltage_sensor;
-    battery_voltage_sensor.device_class = "voltage";
-    battery_voltage_sensor.state_class = "measurement";
-    battery_voltage_sensor.unit_of_measurement = "V";
-    battery_voltage_sensor.icon = "mdi:battery";
-    battery_voltage_sensor.suggested_display_precision = 3;  // More precision for battery voltage
-    battery_voltage_sensor.entity_category = "diagnostic";    // Mark as diagnostic since it's device health info
-    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
-    temp_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
+    addDiagnosticSensor(temp_def, {
+        .dbus_path = "/BatteryVoltage",
+        .icon = "mdi:battery",
+        .friendly_name_suffix = "Battery Voltage",
+        .device_class = "voltage",
+        .unit_of_measurement = "V",
+        .suggested_display_precision = 3
+    });
 
-    // Custom device name extraction
+    addCommonDiagnosticSensors(temp_def);
+
     temp_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
         auto custom_name = items.find("/CustomName");
         if (custom_name != items.end()) {
@@ -451,6 +519,8 @@ void HAServiceRegistry::registerBatteryService()
     ttg_sensor.friendly_name_suffix = "Time to Go";
     battery_def.sensors["/TimeToGo"] = ttg_sensor;
 
+    addCommonDiagnosticSensors(battery_def);
+
     // Custom device name for batteries
     battery_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
         auto custom_name = items.find("/CustomName");
@@ -546,6 +616,22 @@ void HAServiceRegistry::registerSolarChargerService()
     daily_yield.friendly_name_suffix = "Daily Yield";
     solar_def.sensors["/History/Daily/0/Yield"] = daily_yield;
 
+    addDiagnosticSensor(solar_def, {
+        .dbus_path = "/MppOperationMode",
+        .icon = "mdi:solar-panel",
+        .friendly_name_suffix = "MPP Operation Mode",
+        .value_template = "{% set modes = {0: 'Off', 1: 'Voltage/current limited', 2: 'MPPT active', 255: 'Not available'} %}{{ modes[value_json.value] | default('Unknown') }}"
+    });
+
+    addDiagnosticSensor(solar_def, {
+        .dbus_path = "/Load/State",
+        .icon = "mdi:power-plug",
+        .friendly_name_suffix = "Load Output",
+        .value_template = "{% if value_json.value == 1 %}On{% else %}Off{% endif %}"
+    });
+
+	addCommonDiagnosticSensors(solar_def);
+
     service_definitions["solarcharger"] = std::move(solar_def);
 }
 
@@ -628,6 +714,21 @@ void HAServiceRegistry::registerVeBusService()
     state_sensor.value_template = "{% set states = {0: 'Off', 1: 'Low Power', 2: 'Fault', 3: 'Bulk', 4: 'Absorption', 5: 'Float', 6: 'Storage', 7: 'Equalize', 8: 'Passthru', 9: 'Inverting', 10: 'Power assist', 11: 'Power supply', 252: 'Bulk protect'} %}{{ states[value_json.value] | default('Unknown') }}";
     vebus_def.sensors["/State"] = state_sensor;
 
+	addDiagnosticSensor(vebus_def, {
+        .dbus_path = "/Mode",
+        .icon = "mdi:cog",
+        .friendly_name_suffix = "Mode",
+        .value_template = "{% set modes = {1: 'Charger Only', 2: 'Inverter Only', 3: 'On', 4: 'Off'} %}{{ modes[value_json.value] | default('Unknown') }}"
+    });
+
+    addDiagnosticSensor(vebus_def, {
+        .dbus_path = "/VebusError",
+        .icon = "mdi:alert-circle",
+        .friendly_name_suffix = "VE.Bus Error"
+    });
+
+    addCommonDiagnosticSensors(vebus_def);
+
     service_definitions["vebus"] = std::move(vebus_def);
 }
 
@@ -680,6 +781,14 @@ void HAServiceRegistry::registerSystemService()
     pv_power.friendly_name_suffix = "PV Power";
     system_def.sensors["/Dc/Pv/Power"] = pv_power;
 
+	addDiagnosticSensor(system_def, {
+        .dbus_path = "/SystemState/State",
+        .icon = "mdi:state-machine",
+        .friendly_name_suffix = "System State"
+    });
+
+    addCommonDiagnosticSensors(system_def);
+
     service_definitions["system"] = std::move(system_def);
 }
 
@@ -716,16 +825,6 @@ void HAServiceRegistry::registerTankService()
     remaining_sensor.suggested_display_precision = 1;
     remaining_sensor.friendly_name_suffix = "Remaining";
     tank_def.sensors["/Remaining"] = remaining_sensor;
-
-	HASensorConfig battery_voltage_sensor;
-    battery_voltage_sensor.device_class = "voltage";
-    battery_voltage_sensor.state_class = "measurement";
-    battery_voltage_sensor.unit_of_measurement = "V";
-    battery_voltage_sensor.icon = "mdi:battery";
-    battery_voltage_sensor.suggested_display_precision = 3;
-    battery_voltage_sensor.entity_category = "diagnostic";
-    battery_voltage_sensor.friendly_name_suffix = "Battery Voltage";
-    tank_def.sensors["/BatteryVoltage"] = battery_voltage_sensor;
 
     // Custom device name for tanks (often have meaningful names)
     tank_def.get_device_name = [](const std::unordered_map<std::string, Item>& items) -> std::string {
@@ -764,6 +863,15 @@ void HAServiceRegistry::registerTankService()
 
         return "Tank Sensor";
     };
+
+	addDiagnosticSensor(tank_def, {
+        .dbus_path = "/FluidType",
+        .icon = "mdi:waves",
+        .friendly_name_suffix = "Fluid Type",
+        .value_template = "{% set types = {0: 'Fuel', 1: 'Fresh water', 2: 'Waste water', 3: 'Live well', 4: 'Oil', 5: 'Black water'} %}{{ types[value_json.value] | default('Unknown') }}"
+    });
+
+    addCommonDiagnosticSensors(tank_def);
 
     service_definitions["tank"] = std::move(tank_def);
 }
@@ -840,6 +948,15 @@ void HAServiceRegistry::registerGridMeterService()
     total_power.friendly_name_suffix = "Total Power";
     grid_def.sensors["/Ac/Power"] = total_power;
 
+    addDiagnosticSensor(grid_def, {
+        .dbus_path = "/Position",
+        .icon = "mdi:map-marker",
+        .friendly_name_suffix = "Position",
+        .value_template = "{% set positions = {0: 'AC input 1', 1: 'AC output', 2: 'AC input 2'} %}{{ positions[value_json.value] | default('Unknown') }}"
+    });
+
+    addCommonDiagnosticSensors(grid_def);
+
     service_definitions["grid"] = std::move(grid_def);
 }
 
@@ -872,6 +989,8 @@ void HAServiceRegistry::registerSwitchService()
 
         return "Switch Device";
     };
+
+    addCommonDiagnosticSensors(switch_def);
 
     service_definitions["switch"] = std::move(switch_def);
 }
