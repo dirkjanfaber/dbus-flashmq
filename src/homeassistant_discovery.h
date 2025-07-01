@@ -170,24 +170,24 @@ private:
     // Helper methods
     std::string extractDeviceNameFromService(const std::string &full_service_name) const;
     std::string createDeviceIdentifier(const ShortServiceName &short_service_name,
-                                      const std::string &full_service_name = "") const;
+                                       const std::string &full_service_name = "") const;
     std::string createEntityId(const ShortServiceName &short_service_name,
-                          const std::string &dbus_path,
-                          const std::string &full_service_name = "") const;
+                               const std::string &dbus_path,
+                               const std::string &full_service_name = "") const;
     std::string createDiscoveryTopic(const std::string &component,
-                                const std::string &device_id,
-                                const std::string &object_id) const;
+                                     const std::string &device_id,
+                                     const std::string &object_id) const;
     std::string sanitizeForHA(const std::string &input) const;
     std::string createFriendlyEntityName(const std::string& base_device_name, const HASensorConfig& sensor_config) const;
 
     HADevice createDevice(const ShortServiceName &short_service_name,
-                         const HAServiceDefinition* service_def,
-                         const std::unordered_map<std::string, Item> *all_items = nullptr) const;
+                          const HAServiceDefinition* service_def,
+                          const std::unordered_map<std::string, Item> *all_items = nullptr) const;
 
     HAEntityConfig createEntityConfig(const Item &item,
-                                    const ShortServiceName &short_service_name,
-                                    const HASensorConfig &sensor_config,
-                                    const std::string &device_name) const;
+                                      const ShortServiceName &short_service_name,
+                                      const HASensorConfig &sensor_config,
+                                      const std::string &device_name) const;
 
     bool isServiceEnabled(const std::string& service_type) const;
     void ensureGXSystemDevice();
@@ -209,19 +209,19 @@ public:
     bool isSupportedSensor(const std::string &service_type, const std::string &dbus_path) const;
     bool isSwitchOutputPath(const std::string &dbus_path) const;
     HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path,
-                                             const ShortServiceName &short_service_name) const;
+                                                   const ShortServiceName &short_service_name) const;
     void publishSensorEntity(const Item &item, const ShortServiceName &short_service_name);
     void publishSensorEntityWithItems(const Item &item,
-                                     const ShortServiceName &short_service_name,
-                                     const std::unordered_map<std::string, Item> &all_items);
+                                      const ShortServiceName &short_service_name,
+                                      const std::unordered_map<std::string, Item> &all_items);
     void removeSensorEntity(const Item &item, const ShortServiceName &short_service_name);
 
     // Bulk operations for service lifecycle
     void publishAllSensorsForService(const std::string &service,
-                                   const ShortServiceName &short_service_name,
-                                   const std::unordered_map<std::string, Item> &all_items);
+                                     const ShortServiceName &short_service_name,
+                                     const std::unordered_map<std::string, Item> &all_items);
     void removeAllSensorsForService(const ShortServiceName &short_service_name,
-                                  const std::unordered_map<std::string, Item> &all_items);
+                                    const std::unordered_map<std::string, Item> &all_items);
 
     void clearAll();
     bool needsDiscoveryUpdate(const std::string& entity_id, const std::string& new_payload);

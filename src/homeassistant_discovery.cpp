@@ -23,7 +23,7 @@ std::string HADevice::toJson() const
 
     if (!sw_version.empty()) j["sw_version"] = sw_version;
     if (!configuration_url.empty()) j["configuration_url"] = configuration_url;
-	if (!via_device.empty()) {
+    if (!via_device.empty()) {
         j["via_device"] = via_device;
     }
 
@@ -36,50 +36,50 @@ std::vector<HAServiceRegistry::DiagnosticSensorDef> HAServiceRegistry::getCommon
         // Device Instance - Universal identifier
         {
             .dbus_path = "/DeviceInstance",
-            .icon = "mdi:numeric",
-            .friendly_name_suffix = "Device Instance"
+                    .icon = "mdi:numeric",
+                    .friendly_name_suffix = "Device Instance"
         },
 
         // Error Code - Common error reporting
         {
             .dbus_path = "/ErrorCode",
-            .icon = "mdi:alert-circle",
-            .friendly_name_suffix = "Error Code"
+                    .icon = "mdi:alert-circle",
+                    .friendly_name_suffix = "Error Code"
         },
 
         // Status - Device operational status
         {
             .dbus_path = "/Status",
-            .icon = "mdi:information",
-            .friendly_name_suffix = "Status"
+                    .icon = "mdi:information",
+                    .friendly_name_suffix = "Status"
         },
 
         // State - Device state (different from Status)
         {
             .dbus_path = "/State",
-            .icon = "mdi:power-settings",
-            .friendly_name_suffix = "Device State"
+                    .icon = "mdi:power-settings",
+                    .friendly_name_suffix = "Device State"
         },
 
         // Firmware version
         {
             .dbus_path = "/FirmwareVersion",
-            .icon = "mdi:chip",
-            .friendly_name_suffix = "Firmware Version"
+                    .icon = "mdi:chip",
+                    .friendly_name_suffix = "Firmware Version"
         },
 
         // Hardware version
         {
             .dbus_path = "/HardwareVersion",
-            .icon = "mdi:memory",
-            .friendly_name_suffix = "Hardware Version"
+                    .icon = "mdi:memory",
+                    .friendly_name_suffix = "Hardware Version"
         },
 
         // Serial number
         {
             .dbus_path = "/Serial",
-            .icon = "mdi:barcode",
-            .friendly_name_suffix = "Serial Number"
+                    .icon = "mdi:barcode",
+                    .friendly_name_suffix = "Serial Number"
         }
     };
 }
@@ -127,7 +127,7 @@ HAEntityConfig::HAEntityConfig(const std::string &name, const std::string &uniqu
 
 std::string HAEntityConfig::toJson(const HADevice &device) const
 {
-	    nlohmann::json config_json;
+    nlohmann::json config_json;
 
     config_json["name"] = name;
     config_json["unique_id"] = unique_id;
@@ -201,8 +201,8 @@ HAServiceRegistry::HAServiceRegistry()
     registerSystemService();
     registerTankService();
     registerGridMeterService();
-	registerSwitchService();
-	registerMeteoService();
+    registerSwitchService();
+    registerMeteoService();
 }
 
 void HAServiceRegistry::registerMeteoService()
@@ -232,13 +232,13 @@ void HAServiceRegistry::registerMeteoService()
     meteo_def.sensors["/Irradiance"] = irradiance_sensor;
 
     addDiagnosticSensor(meteo_def, {
-        .dbus_path = "/BatteryVoltage",
-        .icon = "mdi:battery",
-        .friendly_name_suffix = "Battery Voltage",
-        .device_class = "voltage",
-        .unit_of_measurement = "V",
-        .suggested_display_precision = 3
-    });
+                            .dbus_path = "/BatteryVoltage",
+                            .icon = "mdi:battery",
+                            .friendly_name_suffix = "Battery Voltage",
+                            .device_class = "voltage",
+                            .unit_of_measurement = "V",
+                            .suggested_display_precision = 3
+                        });
 
     addCommonDiagnosticSensors(meteo_def);
 
@@ -347,13 +347,13 @@ void HAServiceRegistry::registerTemperatureService()
     temp_def.sensors["/Pressure"] = pressure_sensor;
 
     addDiagnosticSensor(temp_def, {
-        .dbus_path = "/BatteryVoltage",
-        .icon = "mdi:battery",
-        .friendly_name_suffix = "Battery Voltage",
-        .device_class = "voltage",
-        .unit_of_measurement = "V",
-        .suggested_display_precision = 3
-    });
+                            .dbus_path = "/BatteryVoltage",
+                            .icon = "mdi:battery",
+                            .friendly_name_suffix = "Battery Voltage",
+                            .device_class = "voltage",
+                            .unit_of_measurement = "V",
+                            .suggested_display_precision = 3
+                        });
 
     addCommonDiagnosticSensors(temp_def);
 
@@ -617,20 +617,20 @@ void HAServiceRegistry::registerSolarChargerService()
     solar_def.sensors["/History/Daily/0/Yield"] = daily_yield;
 
     addDiagnosticSensor(solar_def, {
-        .dbus_path = "/MppOperationMode",
-        .icon = "mdi:solar-panel",
-        .friendly_name_suffix = "MPP Operation Mode",
-        .value_template = "{% set modes = {0: 'Off', 1: 'Voltage/current limited', 2: 'MPPT active', 255: 'Not available'} %}{{ modes[value_json.value] | default('Unknown') }}"
-    });
+                            .dbus_path = "/MppOperationMode",
+                            .icon = "mdi:solar-panel",
+                            .friendly_name_suffix = "MPP Operation Mode",
+                            .value_template = "{% set modes = {0: 'Off', 1: 'Voltage/current limited', 2: 'MPPT active', 255: 'Not available'} %}{{ modes[value_json.value] | default('Unknown') }}"
+                        });
 
     addDiagnosticSensor(solar_def, {
-        .dbus_path = "/Load/State",
-        .icon = "mdi:power-plug",
-        .friendly_name_suffix = "Load Output",
-        .value_template = "{% if value_json.value == 1 %}On{% else %}Off{% endif %}"
-    });
+                            .dbus_path = "/Load/State",
+                            .icon = "mdi:power-plug",
+                            .friendly_name_suffix = "Load Output",
+                            .value_template = "{% if value_json.value == 1 %}On{% else %}Off{% endif %}"
+                        });
 
-	addCommonDiagnosticSensors(solar_def);
+    addCommonDiagnosticSensors(solar_def);
 
     service_definitions["solarcharger"] = std::move(solar_def);
 }
@@ -714,18 +714,18 @@ void HAServiceRegistry::registerVeBusService()
     state_sensor.value_template = "{% set states = {0: 'Off', 1: 'Low Power', 2: 'Fault', 3: 'Bulk', 4: 'Absorption', 5: 'Float', 6: 'Storage', 7: 'Equalize', 8: 'Passthru', 9: 'Inverting', 10: 'Power assist', 11: 'Power supply', 252: 'Bulk protect'} %}{{ states[value_json.value] | default('Unknown') }}";
     vebus_def.sensors["/State"] = state_sensor;
 
-	addDiagnosticSensor(vebus_def, {
-        .dbus_path = "/Mode",
-        .icon = "mdi:cog",
-        .friendly_name_suffix = "Mode",
-        .value_template = "{% set modes = {1: 'Charger Only', 2: 'Inverter Only', 3: 'On', 4: 'Off'} %}{{ modes[value_json.value] | default('Unknown') }}"
-    });
+    addDiagnosticSensor(vebus_def, {
+                            .dbus_path = "/Mode",
+                            .icon = "mdi:cog",
+                            .friendly_name_suffix = "Mode",
+                            .value_template = "{% set modes = {1: 'Charger Only', 2: 'Inverter Only', 3: 'On', 4: 'Off'} %}{{ modes[value_json.value] | default('Unknown') }}"
+                        });
 
     addDiagnosticSensor(vebus_def, {
-        .dbus_path = "/VebusError",
-        .icon = "mdi:alert-circle",
-        .friendly_name_suffix = "VE.Bus Error"
-    });
+                            .dbus_path = "/VebusError",
+                            .icon = "mdi:alert-circle",
+                            .friendly_name_suffix = "VE.Bus Error"
+                        });
 
     addCommonDiagnosticSensors(vebus_def);
 
@@ -781,11 +781,11 @@ void HAServiceRegistry::registerSystemService()
     pv_power.friendly_name_suffix = "PV Power";
     system_def.sensors["/Dc/Pv/Power"] = pv_power;
 
-	addDiagnosticSensor(system_def, {
-        .dbus_path = "/SystemState/State",
-        .icon = "mdi:state-machine",
-        .friendly_name_suffix = "System State"
-    });
+    addDiagnosticSensor(system_def, {
+                            .dbus_path = "/SystemState/State",
+                            .icon = "mdi:state-machine",
+                            .friendly_name_suffix = "System State"
+                        });
 
     addCommonDiagnosticSensors(system_def);
 
@@ -845,31 +845,31 @@ void HAServiceRegistry::registerTankService()
         if (fluid_type != items.end()) {
             int type = fluid_type->second.get_value().value.as_int();
             switch (type) {
-                case 0: return "Fuel Tank";
-                case 1: return "Fresh Water Tank";
-                case 2: return "Waste Water Tank";
-                case 3: return "Live Well";
-                case 4: return "Oil Tank";
-                case 5: return "Black Water Tank";
-                case 6: return "Gasoline Tank";
-                case 7: return "Diesel Tank";
-                case 8: return "LPG Tank";
-                case 9: return "LNG Tank";
-                case 10: return "Hydraulic Oil Tank";
-                case 11: return "Raw Water Tank";
-                default: return "Tank Sensor";
+            case 0: return "Fuel Tank";
+            case 1: return "Fresh Water Tank";
+            case 2: return "Waste Water Tank";
+            case 3: return "Live Well";
+            case 4: return "Oil Tank";
+            case 5: return "Black Water Tank";
+            case 6: return "Gasoline Tank";
+            case 7: return "Diesel Tank";
+            case 8: return "LPG Tank";
+            case 9: return "LNG Tank";
+            case 10: return "Hydraulic Oil Tank";
+            case 11: return "Raw Water Tank";
+            default: return "Tank Sensor";
             }
         }
 
         return "Tank Sensor";
     };
 
-	addDiagnosticSensor(tank_def, {
-        .dbus_path = "/FluidType",
-        .icon = "mdi:waves",
-        .friendly_name_suffix = "Fluid Type",
-        .value_template = "{% set types = {0: 'Fuel', 1: 'Fresh water', 2: 'Waste water', 3: 'Live well', 4: 'Oil', 5: 'Black water'} %}{{ types[value_json.value] | default('Unknown') }}"
-    });
+    addDiagnosticSensor(tank_def, {
+                            .dbus_path = "/FluidType",
+                            .icon = "mdi:waves",
+                            .friendly_name_suffix = "Fluid Type",
+                            .value_template = "{% set types = {0: 'Fuel', 1: 'Fresh water', 2: 'Waste water', 3: 'Live well', 4: 'Oil', 5: 'Black water'} %}{{ types[value_json.value] | default('Unknown') }}"
+                        });
 
     addCommonDiagnosticSensors(tank_def);
 
@@ -949,11 +949,11 @@ void HAServiceRegistry::registerGridMeterService()
     grid_def.sensors["/Ac/Power"] = total_power;
 
     addDiagnosticSensor(grid_def, {
-        .dbus_path = "/Position",
-        .icon = "mdi:map-marker",
-        .friendly_name_suffix = "Position",
-        .value_template = "{% set positions = {0: 'AC input 1', 1: 'AC output', 2: 'AC input 2'} %}{{ positions[value_json.value] | default('Unknown') }}"
-    });
+                            .dbus_path = "/Position",
+                            .icon = "mdi:map-marker",
+                            .friendly_name_suffix = "Position",
+                            .value_template = "{% set positions = {0: 'AC input 1', 1: 'AC output', 2: 'AC input 2'} %}{{ positions[value_json.value] | default('Unknown') }}"
+                        });
 
     addCommonDiagnosticSensors(grid_def);
 
@@ -970,7 +970,7 @@ void HAServiceRegistry::registerSwitchService()
     device_state_sensor.icon = "mdi:power-settings";
     device_state_sensor.entity_category = "diagnostic";
     device_state_sensor.friendly_name_suffix = "Device State";
-	device_state_sensor.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
+    device_state_sensor.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
     switch_def.sensors["/State"] = device_state_sensor;
 
     // Custom device name extraction
@@ -1156,7 +1156,7 @@ std::string HomeAssistantDiscovery::sanitizeForHA(const std::string &input) cons
 }
 
 std::string HomeAssistantDiscovery::createDeviceIdentifier(const ShortServiceName &short_service_name,
-                                                          const std::string &full_service_name) const
+                                                           const std::string &full_service_name) const
 {
     if (!full_service_name.empty()) {
         std::string device_name = extractDeviceNameFromService(full_service_name);
@@ -1169,8 +1169,8 @@ std::string HomeAssistantDiscovery::createDeviceIdentifier(const ShortServiceNam
 }
 
 std::string HomeAssistantDiscovery::createEntityId(const ShortServiceName &short_service_name,
-                                                  const std::string &dbus_path,
-                                                  const std::string &full_service_name) const
+                                                   const std::string &dbus_path,
+                                                   const std::string &full_service_name) const
 {
     std::string path_sanitized = sanitizeForHA(dbus_path);
 
@@ -1185,8 +1185,8 @@ std::string HomeAssistantDiscovery::createEntityId(const ShortServiceName &short
 }
 
 std::string HomeAssistantDiscovery::createDiscoveryTopic(const std::string &component,
-                                                        const std::string &device_id,
-                                                        const std::string &object_id) const
+                                                         const std::string &device_id,
+                                                         const std::string &object_id) const
 {
     return discovery_prefix + "/" + component + "/" + device_id + "/" + object_id + "/config";
 }
@@ -1200,13 +1200,13 @@ std::string HomeAssistantDiscovery::createFriendlyEntityName(const std::string& 
 }
 
 HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_service_name,
-                                             const HAServiceDefinition* service_def,
-                                             const std::unordered_map<std::string, Item> *all_items) const
+                                              const HAServiceDefinition* service_def,
+                                              const std::unordered_map<std::string, Item> *all_items) const
 {
     std::string device_name;
     std::string model;
 
-	if (service_def && !service_def->model_name.empty()) {
+    if (service_def && !service_def->model_name.empty()) {
         model = service_def->model_name;
     } else {
         model = "Victron Device";
@@ -1243,7 +1243,7 @@ HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_serv
         }
     }
 
-	if (model.empty()) {
+    if (model.empty()) {
         model = "Victron Device";
     }
 
@@ -1264,7 +1264,7 @@ HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_serv
     if (short_service_name.service_type == "system") {
         // The GX system device uses VRM ID as identifier (no service type prefix)
         identifier = vrm_id;
-		model = "Venus GX (" + vrm_id + ")";
+        model = "Venus GX (" + vrm_id + ")";
         device = HADevice(device_name, model, identifier);
     } else {
         identifier = createDeviceIdentifier(short_service_name);
@@ -1276,12 +1276,12 @@ HADevice HomeAssistantDiscovery::createDevice(const ShortServiceName &short_serv
 }
 
 HAEntityConfig HomeAssistantDiscovery::createEntityConfig(const Item &item,
-                                                        const ShortServiceName &short_service_name,
-                                                        const HASensorConfig &sensor_config,
-                                                        const std::string &device_name) const
+                                                          const ShortServiceName &short_service_name,
+                                                          const HASensorConfig &sensor_config,
+                                                          const std::string &device_name) const
 {
     std::string entity_name = createFriendlyEntityName(device_name, sensor_config);
-	std::string unique_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
+    std::string unique_id = createEntityId(short_service_name, item.get_path(), item.get_service_name());
     std::string state_topic = "N/" + vrm_id + "/" + short_service_name + item.get_path();
 
     HAEntityConfig config(entity_name, unique_id, state_topic);
@@ -1313,7 +1313,7 @@ bool HomeAssistantDiscovery::isSupportedSensor(const std::string &service_type, 
         return false;
     }
 
-	// Check if we have an exact match first
+    // Check if we have an exact match first
     if (service_registry.hasSensorPath(service_type, dbus_path)) {
         return true;
     }
@@ -1336,7 +1336,7 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
         return;
     }
 
-	if (short_service_name.service_type != "system") {
+    if (short_service_name.service_type != "system") {
         ensureGXSystemDevice();
     }
 
@@ -1392,8 +1392,8 @@ void HomeAssistantDiscovery::publishSensorEntity(const Item &item, const ShortSe
 }
 
 void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
-                                                         const ShortServiceName &short_service_name,
-                                                         const std::unordered_map<std::string, Item> &all_items)
+                                                          const ShortServiceName &short_service_name,
+                                                          const std::unordered_map<std::string, Item> &all_items)
 {
     if (!enabled) {
         return;
@@ -1507,8 +1507,8 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
 }
 
 void HomeAssistantDiscovery::publishAllSensorsForService(const std::string &service,
-                                                       const ShortServiceName &short_service_name,
-                                                       const std::unordered_map<std::string, Item> &all_items)
+                                                         const ShortServiceName &short_service_name,
+                                                         const std::unordered_map<std::string, Item> &all_items)
 {
     if (!enabled) {
         return;
@@ -1565,7 +1565,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
         config.icon = "mdi:power-settings";
         config.entity_category = "diagnostic";
         config.friendly_name_suffix = "Device State";
-		config.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
+        config.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
     }
     else if (dbus_path.find("/SwitchableOutput/") == 0) {
         // Parse the output type and number
@@ -1588,7 +1588,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
             config.component = "switch";
             config.device_class = "switch";
 
-			config.command_topic = "W/" + vrm_id + "/" + short_service_name + dbus_path;
+            config.command_topic = "W/" + vrm_id + "/" + short_service_name + dbus_path;
             config.payload_on = "{\"value\": 1}";
             config.payload_off = "{\"value\": 0}";
             config.optimistic = false; // Wait for state feedback
@@ -1626,7 +1626,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
 }
 
 void HomeAssistantDiscovery::removeAllSensorsForService(const ShortServiceName &short_service_name,
-                                                      const std::unordered_map<std::string, Item> &all_items)
+                                                        const std::unordered_map<std::string, Item> &all_items)
 {
     if (!enabled) {
         return;
@@ -1679,7 +1679,7 @@ void HomeAssistantDiscovery::clearAll()
     flashmq_logf(LOG_INFO, "Clearing all Home Assistant discovery entities");
 
     // Remove all published entities
-	for (const auto &pair : published_entities) {
+    for (const auto &pair : published_entities) {
         try {
             // We need to parse the entity_id to get device_id and component
             // Entity ID format: vrm_id_service_type_instance_path
@@ -1707,7 +1707,7 @@ void HomeAssistantDiscovery::clearAll()
 
     published_entities.clear();
     published_devices.clear();
-	cached_discovery_payloads.clear();
+    cached_discovery_payloads.clear();
 
     flashmq_logf(LOG_INFO, "Cleared all Home Assistant discovery entities");
 }

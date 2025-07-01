@@ -381,7 +381,7 @@ void State::write_to_dbus(const std::string &topic, const std::string &payload)
     std::vector<VeVariant> args;
     args.push_back(new_value);
     dbus_uint32_t serial = call_method(item.get_service_name(), item.get_path(),
-                                      "com.victronenergy.BusItem", "SetValue", args, true);
+                                       "com.victronenergy.BusItem", "SetValue", args, true);
 
     auto set_value_handler = [](State *state, const std::string &topic, DBusMessage *msg) {
         const int msg_type = dbus_message_get_type(msg);
