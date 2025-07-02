@@ -10,6 +10,7 @@
 #include "types.h"
 #include "shortservicename.h"
 #include "serviceidentifier.h"
+#include "vendor/json.hpp"
 
 namespace dbus_flashmq
 {
@@ -30,7 +31,7 @@ struct HADevice
     HADevice() = default;
     HADevice(const std::string &name, const std::string &model, const std::string &identifier);
 
-    std::string toJson() const;
+    nlohmann::json toJson() const;
 };
 
 /**

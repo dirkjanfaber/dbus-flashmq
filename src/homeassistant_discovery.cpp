@@ -1,5 +1,4 @@
 #include "homeassistant_discovery.h"
-#include "vendor/json.hpp"
 #include "vendor/flashmq_plugin.h"
 #include "utils.h"
 #include <algorithm>
@@ -13,7 +12,7 @@ HADevice::HADevice(const std::string &name, const std::string &model, const std:
 {
 }
 
-std::string HADevice::toJson() const
+nlohmann::json HADevice::toJson() const
 {
     nlohmann::json j;
     j["name"] = name;
@@ -27,7 +26,7 @@ std::string HADevice::toJson() const
         j["via_device"] = via_device;
     }
 
-    return j.dump();
+    return j;
 }
 
 std::vector<HAServiceRegistry::DiagnosticSensorDef> HAServiceRegistry::getCommonDiagnostics() const
@@ -132,7 +131,7 @@ std::string HAEntityConfig::toJson(const HADevice &device) const
     config_json["name"] = name;
     config_json["unique_id"] = unique_id;
     config_json["state_topic"] = state_topic;
-    config_json["device"] = nlohmann::json::parse(device.toJson());
+    config_json["device"] = device.toJson();
 
     if (!value_template.empty()) {
         config_json["value_template"] = value_template;
