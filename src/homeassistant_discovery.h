@@ -211,7 +211,6 @@ public:
     bool isSwitchOutputPath(const std::string &dbus_path) const;
     HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path,
                                                    const ShortServiceName &short_service_name) const;
-    void publishSensorEntity(const Item &item, const ShortServiceName &short_service_name);
     void publishSensorEntityWithItems(const Item &item,
                                       const ShortServiceName &short_service_name,
                                       const std::unordered_map<std::string, Item> &all_items);
