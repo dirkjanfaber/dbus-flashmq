@@ -1060,7 +1060,7 @@ const std::string &HomeAssistantDiscovery::getDiscoveryPrefix() const
 
 std::string HomeAssistantDiscovery::extractDeviceNameFromService(const std::string &full_service_name) const
 {
-    if (full_service_name.find("com.victronenergy.") == 0) {
+    if (full_service_name.starts_with("com.victronenergy.")) {
         std::vector<std::string> parts = splitToVector(full_service_name, '.');
         if (parts.size() >= 4) {
             // parts[0] = "com"
@@ -1482,10 +1482,9 @@ bool HomeAssistantDiscovery::isSwitchOutputPath(const std::string &dbus_path) co
         return true;
     }
 
-    if (dbus_path.find("/SwitchableOutput/") == 0) {
-        return (dbus_path.find("/State") != std::string::npos ||
-                dbus_path.find("/Dimming") != std::string::npos);
-    }
+    if (dbus_path.starts_with("/SwitchableOutput/")
+            && (dbus_path.ends_with("/State") || dbus_path.ends_with("/Dimming")))
+        return true;
 
     return false;
 }
@@ -1501,7 +1500,7 @@ HASensorConfig HomeAssistantDiscovery::createDynamicSwitchSensorConfig(const std
         config.friendly_name_suffix = "Device State";
         config.value_template = "{% set states = {256: 'Connected', 257: 'Over temperature', 258: 'Temperature warning', 259: 'Channel fault', 260: 'Channel Tripped', 261: 'Under Voltage'} %}{{ states[value_json.value] | default('Unknown (' + value_json.value|string + ')') }}";
     }
-    else if (dbus_path.find("/SwitchableOutput/") == 0) {
+    else if (dbus_path.starts_with("/SwitchableOutput/")) {
         // Parse the output type and number
         std::string remainder = dbus_path.substr(18); // Remove "/SwitchableOutput/"
         size_t first_slash = remainder.find('/');
@@ -1580,15 +1579,8 @@ void HomeAssistantDiscovery::removeAllSensorsForService(const ShortServiceName &
         auto device_it = published_devices.find(device_id);
         if (device_it != published_devices.end()) {
             // Check if any entities still exist for this device
-            bool has_entities = false;
-            std::string device_prefix = device_id + "_";
-            for (const auto &entity_pair : published_entities) {
-                if (entity_pair.first.find(device_prefix) == 0) {
-                    has_entities = true;
-                    break;
-                }
-            }
-
+            bool has_entities = std::any_of(published_entities.begin(), published_entities.end(),
+                                            [&device_id](const auto &entity_pair) { return entity_pair.first.starts_with(device_id + "_"); });
             if (!has_entities) {
                 published_devices.erase(device_it);
                 flashmq_logf(LOG_DEBUG, "Removed HA device: %s", device_id.c_str());
@@ -1617,17 +1609,12 @@ void HomeAssistantDiscovery::clearAll()
             std::string entity_id = pair.first;
 
             // Find the device_id by looking at published devices
-            std::string device_id;
-            for (const auto &device_pair : published_devices) {
-                if (entity_id.find(device_pair.first + "_") == 0) {
-                    device_id = device_pair.first;
-                    break;
-                }
-            }
+            auto it = std::find_if(published_devices.begin(), published_devices.end(),
+                                   [&entity_id](const auto &device_pair) { return entity_id.starts_with(device_pair.first + "_"); });
 
-            if (!device_id.empty()) {
+            if (it != published_devices.end()) {
                 // Default to sensor component, could be made smarter
-                std::string discovery_topic = createDiscoveryTopic("sensor", device_id, entity_id);
+                std::string discovery_topic = createDiscoveryTopic("sensor", it->first, entity_id);
                 flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
             }
         } catch (const std::exception &ex) {
