@@ -1428,6 +1428,7 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
             // Send empty payload to remove entity - NOW WITH DEVICE ID
             std::string discovery_topic = createDiscoveryTopic(component, device_id, entity_id);
             flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
+            cached_discovery_payloads.erase(entity_id);
 
             published_entities.erase(it);
             flashmq_logf(LOG_INFO, "Removed Home Assistant discovery for sensor: %s", entity_id.c_str());
