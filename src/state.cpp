@@ -115,6 +115,11 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, std::unordered_
         add_dbus_to_mqtt_mapping(service, device_instance, item, force_publish);
     }
 
+    // Home Assistant Discovery integration
+    if (ha_discovery.isEnabled()) {
+        ha_discovery.publishSensorEntitiesWithItems(service, s, dbus_service_items, items);
+    }
+
     attempt_to_process_delayed_changes();
 }
 
@@ -138,35 +143,6 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, ServiceIdentifi
 
     if (this->alive || fully_mapped_item.should_be_retained() || force_publish)
         fully_mapped_item.publish();
-
-    // Home Assistant Discovery integration
-    if (ha_discovery.isEnabled()) {
-        try {
-            ShortServiceName short_service_name(service, instance);
-
-            // Handle device name updates - these require republishing all sensors with updated device info
-            if (fully_mapped_item.get_path() == "/CustomName" || fully_mapped_item.get_path() == "/ProductName") {
-                auto service_items_it = dbus_service_items.find(service);
-                if (service_items_it != dbus_service_items.end()) {
-                    ha_discovery.publishAllSensorsForService(service, short_service_name, service_items_it->second);
-                }
-            }
-            // Check if this is a supported sensor path for this service type
-            else if (ha_discovery.isSupportedSensor(short_service_name.service_type, fully_mapped_item.get_path())) {
-                // Use full context if available for better device naming
-                auto service_items_it = dbus_service_items.find(service);
-                if (service_items_it != dbus_service_items.end()) {
-                    // Flooding prevention is handled inside publishSensorEntityWithItems via payload comparison
-                    ha_discovery.publishSensorEntityWithItems(fully_mapped_item, short_service_name, service_items_it->second);
-                } else {
-                    ha_discovery.publishSensorEntity(fully_mapped_item, short_service_name);
-                }
-            }
-        } catch (const std::exception &ex) {
-            flashmq_logf(LOG_ERR, "Error publishing HA discovery for %s%s: %s",
-                         service.c_str(), fully_mapped_item.get_path().c_str(), ex.what());
-        }
-    }
 }
 
 /**
@@ -381,7 +357,7 @@ void State::write_to_dbus(const std::string &topic, const std::string &payload)
     std::vector<VeVariant> args;
     args.push_back(new_value);
     dbus_uint32_t serial = call_method(item.get_service_name(), item.get_path(),
-                                      "com.victronenergy.BusItem", "SetValue", args, true);
+                                       "com.victronenergy.BusItem", "SetValue", args, true);
 
     auto set_value_handler = [](State *state, const std::string &topic, DBusMessage *msg) {
         const int msg_type = dbus_message_get_type(msg);
@@ -426,6 +402,7 @@ ServiceIdentifier State::store_and_get_instance_from_service(const std::string &
  *
  *  { "keepalive-options" : [ "suppress-republish" ] }
  *  { "keepalive-options" : [ {"full-publish-completed-echo": "B9FMlGWoCcfMKc" } ] }
+ *  { "keepalive-options" : [ "ha-config-publish" ] }
  *
  * The payload was previsouly used for selecting only certain topics. We are probably not going to support that functionality. But
  * Note that that format was an array of topics, not a dict with keys. That kind of limited supporting other things with it. That's why
@@ -464,6 +441,10 @@ void State::handle_keepalive(const std::string &payload)
                         if (el.is_object())
                         {
                             payload_echo = el["full-publish-completed-echo"];
+                        }
+                        if (el.is_string() && el.get<std::string>() == "ha-config-publish")
+                        {
+                            ha_discovery.publishAllConfigs();
                         }
                     }
                 }
@@ -891,22 +872,12 @@ void State::scan_dbus_service(const std::string &service)
 
 void State::remove_dbus_service(const std::string &service)
 {
+    auto instance = service_names_to_instance[service];
+    ShortServiceName s(service, instance);
+
     // Handle HA Discovery cleanup before removing the service data
     if (ha_discovery.isEnabled()) {
-        try {
-            // Find the short service name for this service
-            for (const auto &mapping_pair : service_type_and_instance_to_full_service) {
-                if (mapping_pair.second == service) {
-                    auto pos = dbus_service_items.find(service);
-                    if (pos != dbus_service_items.end()) {
-                        ha_discovery.removeAllSensorsForService(mapping_pair.first, pos->second);
-                    }
-                    break;
-                }
-            }
-        } catch (const std::exception &ex) {
-            flashmq_logf(LOG_ERR, "Error removing HA discovery for service %s: %s", service.c_str(), ex.what());
-        }
+        ha_discovery.removeAllSensorsForService(s, dbus_service_items[service]);
     }
 
     // Publish null values for all items (existing logic)

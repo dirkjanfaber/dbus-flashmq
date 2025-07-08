@@ -16,6 +16,10 @@ public:
     std::string service_type;
     ShortServiceName(const std::string &service, ServiceIdentifier instance);
     ShortServiceName();
+
+    std::string_view instance() const {
+        return service_type.length() ? std::string_view(begin() + service_type.length() + 1, end()) : std::string_view();
+    }
 };
 
 }
