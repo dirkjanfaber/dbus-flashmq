@@ -73,6 +73,8 @@ struct HAServiceDefinition
 
     // Optional custom device name extraction function
     std::function<std::string(const std::unordered_map<std::string, Item>&)> get_device_name;
+
+    bool hasSensorPath(const std::string& dbus_path) const { return sensors.find(dbus_path) != sensors.end(); };
 };
 
 /**
@@ -144,7 +146,6 @@ public:
     const HAServiceDefinition* getServiceDefinition(const std::string& service_type) const;
     std::vector<std::string> getSupportedServiceTypes() const;
     bool isSupported(const std::string& service_type) const;
-    bool hasSensorPath(const std::string& service_type, const std::string& dbus_path) const;
     const HASensorConfig* getSensorConfig(const std::string& service_type, const std::string& dbus_path) const;
 };
 

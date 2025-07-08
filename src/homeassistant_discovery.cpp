@@ -1014,14 +1014,6 @@ bool HAServiceRegistry::isSupported(const std::string& service_type) const
     return service_definitions.find(service_type) != service_definitions.end();
 }
 
-bool HAServiceRegistry::hasSensorPath(const std::string& service_type, const std::string& dbus_path) const
-{
-    auto service_def = getServiceDefinition(service_type);
-    if (!service_def) return false;
-
-    return service_def->sensors.find(dbus_path) != service_def->sensors.end();
-}
-
 const HASensorConfig* HAServiceRegistry::getSensorConfig(const std::string& service_type, const std::string& dbus_path) const
 {
     auto service_def = getServiceDefinition(service_type);
@@ -1312,8 +1304,13 @@ bool HomeAssistantDiscovery::isSupportedSensor(const std::string &service_type, 
         return false;
     }
 
+    const HAServiceDefinition* service_def = service_registry.getServiceDefinition(service_type);
+    if (!service_def) {
+        return false;
+    }
+
     // Check if we have an exact match first
-    if (service_registry.hasSensorPath(service_type, dbus_path)) {
+    if (service_def->hasSensorPath(dbus_path)) {
         return true;
     }
 
