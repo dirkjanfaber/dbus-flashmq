@@ -1370,12 +1370,12 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
         std::string payload = config.toJson(device);
 
         // Only publish if payload actually changed (this prevents flooding!)
-        if (needsDiscoveryUpdate(entity_id, payload)) {
+        if (needsDiscoveryUpdate(discovery_topic, payload)) {
             flashmq_publish_message(discovery_topic, 0, true, payload); // retained = true for discovery
 
             // Cache the published entity and payload
             published_entities[entity_id] = config;
-            cached_discovery_payloads[entity_id] = payload;
+            cached_discovery_payloads[discovery_topic] = payload;
 
             flashmq_logf(LOG_INFO, "Published Home Assistant discovery for %s: %s (device: %s, component: %s)",
                          sensor_config->component.c_str(), config.name.c_str(), device.name.c_str(), sensor_config->component.c_str());
@@ -1390,8 +1390,8 @@ void HomeAssistantDiscovery::publishSensorEntityWithItems(const Item &item,
 }
 
 // New method implementation
-bool HomeAssistantDiscovery::needsDiscoveryUpdate(const std::string& entity_id, const std::string& new_payload) {
-    auto it = cached_discovery_payloads.find(entity_id);
+bool HomeAssistantDiscovery::needsDiscoveryUpdate(const std::string& discovery_topic, const std::string& new_payload) {
+    auto it = cached_discovery_payloads.find(discovery_topic);
     if (it == cached_discovery_payloads.end()) {
         return true; // First time publishing
     }
@@ -1428,7 +1428,7 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
             // Send empty payload to remove entity - NOW WITH DEVICE ID
             std::string discovery_topic = createDiscoveryTopic(component, device_id, entity_id);
             flashmq_publish_message(discovery_topic, 0, true, ""); // empty payload removes the entity
-            cached_discovery_payloads.erase(entity_id);
+            cached_discovery_payloads.erase(discovery_topic);
 
             published_entities.erase(it);
             flashmq_logf(LOG_INFO, "Removed Home Assistant discovery for sensor: %s", entity_id.c_str());

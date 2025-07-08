@@ -169,6 +169,9 @@ private:
     std::unordered_map<std::string, HADevice> published_devices;
     std::unordered_map<std::string, HAEntityConfig> published_entities;
 
+    // Key is discovery_topic
+    std::unordered_map<std::string, std::string> cached_discovery_payloads;
+
     // Helper methods
     std::string extractDeviceNameFromService(const std::string &full_service_name) const;
     std::string createDeviceIdentifier(const ShortServiceName &short_service_name,
@@ -193,7 +196,6 @@ private:
 
     bool isServiceEnabled(const std::string& service_type) const;
     void ensureGXSystemDevice();
-    std::unordered_map<std::string, std::string> cached_discovery_payloads;
 
 public:
     HomeAssistantDiscovery();
@@ -225,7 +227,7 @@ public:
                                     const std::unordered_map<std::string, Item> &all_items);
 
     void clearAll();
-    bool needsDiscoveryUpdate(const std::string& entity_id, const std::string& new_payload);
+    bool needsDiscoveryUpdate(const std::string& discovery_topic, const std::string& new_payload);
 
 };
 
