@@ -1571,12 +1571,8 @@ void HomeAssistantDiscovery::removeAllSensorsForService(const ShortServiceName &
     try {
         // Remove each published sensor for this service
         for (const auto &item_pair : all_items) {
-            const std::string &dbus_path = item_pair.first;
             const Item &item = item_pair.second;
-
-            if (service_registry.hasSensorPath(short_service_name.service_type, dbus_path)) {
-                removeSensorEntity(item, short_service_name);
-            }
+            removeSensorEntity(item, short_service_name);
         }
 
         // Clean up the device if no more entities exist
