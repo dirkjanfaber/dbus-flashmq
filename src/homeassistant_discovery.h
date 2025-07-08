@@ -220,6 +220,7 @@ public:
     void removeSensorEntity(const Item &item, const ShortServiceName &short_service_name);
 
     // Bulk operations for service lifecycle
+    void publishAllConfigs() const;
     void publishAllSensorsForService(const std::string &service,
                                      const ShortServiceName &short_service_name,
                                      const std::unordered_map<std::string, Item> &all_items);

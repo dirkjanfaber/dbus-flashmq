@@ -423,6 +423,7 @@ ServiceIdentifier State::store_and_get_instance_from_service(const std::string &
  *
  *  { "keepalive-options" : [ "suppress-republish" ] }
  *  { "keepalive-options" : [ {"full-publish-completed-echo": "B9FMlGWoCcfMKc" } ] }
+ *  { "keepalive-options" : [ "ha-config-publish" ] }
  *
  * The payload was previsouly used for selecting only certain topics. We are probably not going to support that functionality. But
  * Note that that format was an array of topics, not a dict with keys. That kind of limited supporting other things with it. That's why
@@ -461,6 +462,10 @@ void State::handle_keepalive(const std::string &payload)
                         if (el.is_object())
                         {
                             payload_echo = el["full-publish-completed-echo"];
+                        }
+                        if (el.is_string() && el.get<std::string>() == "ha-config-publish")
+                        {
+                            ha_discovery.publishAllConfigs();
                         }
                     }
                 }

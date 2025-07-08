@@ -1438,6 +1438,13 @@ void HomeAssistantDiscovery::removeSensorEntity(const Item &item, const ShortSer
     }
 }
 
+void HomeAssistantDiscovery::publishAllConfigs() const
+{
+    for (const auto &el : cached_discovery_payloads) {
+        flashmq_publish_message(el.first, 0, true, el.second);
+    }
+}
+
 void HomeAssistantDiscovery::publishAllSensorsForService(const std::string &service,
                                                          const ShortServiceName &short_service_name,
                                                          const std::unordered_map<std::string, Item> &all_items)
