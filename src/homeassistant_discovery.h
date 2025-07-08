@@ -197,6 +197,12 @@ private:
     bool isServiceEnabled(const std::string& service_type) const;
     void ensureGXSystemDevice();
 
+    bool isSwitchOutputPath(const std::string &dbus_path) const;
+    HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path,
+                                                   const ShortServiceName &short_service_name) const;
+    void removeSensorEntity(const Item &item, const ShortServiceName &short_service_name);
+    bool needsDiscoveryUpdate(const std::string& discovery_topic, const std::string& new_payload);
+
 public:
     HomeAssistantDiscovery();
     ~HomeAssistantDiscovery() = default;
@@ -211,13 +217,9 @@ public:
 
     // Core sensor support
     bool isSupportedSensor(const std::string &service_type, const std::string &dbus_path) const;
-    bool isSwitchOutputPath(const std::string &dbus_path) const;
-    HASensorConfig createDynamicSwitchSensorConfig(const std::string &dbus_path,
-                                                   const ShortServiceName &short_service_name) const;
     void publishSensorEntityWithItems(const Item &item,
                                       const ShortServiceName &short_service_name,
                                       const std::unordered_map<std::string, Item> &all_items);
-    void removeSensorEntity(const Item &item, const ShortServiceName &short_service_name);
 
     // Bulk operations for service lifecycle
     void publishAllConfigs() const;
@@ -226,9 +228,7 @@ public:
                                      const std::unordered_map<std::string, Item> &all_items);
     void removeAllSensorsForService(const ShortServiceName &short_service_name,
                                     const std::unordered_map<std::string, Item> &all_items);
-
     void clearAll();
-    bool needsDiscoveryUpdate(const std::string& discovery_topic, const std::string& new_payload);
 
 };
 
