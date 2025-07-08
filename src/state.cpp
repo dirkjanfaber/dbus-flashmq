@@ -117,29 +117,8 @@ void State::add_dbus_to_mqtt_mapping(const std::string &service, std::unordered_
 
     // Home Assistant Discovery integration
     if (ha_discovery.isEnabled()) {
-        auto & service_items = dbus_service_items[service];
-        for (auto const &p : items)
-        {
-            Item const &item = p.second;
-            try {
-                // Handle device name updates - these require republishing all sensors with updated device info
-                if (item.get_path() == "/CustomName" || item.get_path() == "/ProductName") {
-                    ha_discovery.publishAllSensorsForService(service, s, service_items);
-                }
-                // Check if this is a supported sensor path for this service type
-                else if (ha_discovery.isSupportedSensor(s.service_type, item.get_path())) {
-                    Item const &fully_mapped_item = service_items[item.get_path()];
-                    // Use full context if available for better device naming
-                    // Flooding prevention is handled inside publishSensorEntityWithItems via payload comparison
-                    ha_discovery.publishSensorEntityWithItems(fully_mapped_item, s, service_items);
-                }
-            } catch (const std::exception &ex) {
-                flashmq_logf(LOG_ERR, "Error publishing HA discovery for %s%s: %s",
-                             service.c_str(), item.get_path().c_str(), ex.what());
-            }
-        }
+        ha_discovery.publishSensorEntitiesWithItems(service, s, dbus_service_items, items);
     }
-
 
     attempt_to_process_delayed_changes();
 }
@@ -893,22 +872,12 @@ void State::scan_dbus_service(const std::string &service)
 
 void State::remove_dbus_service(const std::string &service)
 {
+    auto instance = service_names_to_instance[service];
+    ShortServiceName s(service, instance);
+
     // Handle HA Discovery cleanup before removing the service data
     if (ha_discovery.isEnabled()) {
-        try {
-            // Find the short service name for this service
-            for (const auto &mapping_pair : service_type_and_instance_to_full_service) {
-                if (mapping_pair.second == service) {
-                    auto pos = dbus_service_items.find(service);
-                    if (pos != dbus_service_items.end()) {
-                        ha_discovery.removeAllSensorsForService(mapping_pair.first, pos->second);
-                    }
-                    break;
-                }
-            }
-        } catch (const std::exception &ex) {
-            flashmq_logf(LOG_ERR, "Error removing HA discovery for service %s: %s", service.c_str(), ex.what());
-        }
+        ha_discovery.removeAllSensorsForService(s, dbus_service_items[service]);
     }
 
     // Publish null values for all items (existing logic)
