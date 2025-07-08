@@ -1067,7 +1067,7 @@ std::string HomeAssistantDiscovery::createDiscoveryTopic(std::string_view compon
     result.append(device_id);
     result.push_back('/');
     result.append(entity_id);
-    result.append("/config"sv);
+    result.append("/config");
     return result;
 }
 
