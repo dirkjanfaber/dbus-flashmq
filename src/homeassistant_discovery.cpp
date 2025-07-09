@@ -1319,14 +1319,14 @@ void HomeAssistantDiscovery::publishSensorEntitiesWithItems(const std::string &s
 
     // Create/update device with proper name using all available items
     HADevice device = createDevice(short_service_name, *service_def, service_items);
-    // Always update device in case name changed
+    bool new_device = published_device_ids.count(device.identifiers) == 0;
     published_device_ids.insert(device.identifiers);
 
-    auto device_name_item_changed = [&all_items]() -> bool {
-        return all_items.count("/CustomName") || all_items.count("/ProductName");
+    auto device_name_item_changed = [&changed_items]() -> bool {
+        return changed_items.count("/CustomName") || changed_items.count("/ProductName");
     };
     // Handle device name updates - these require republishing all sensors with updated device info
-    const std::unordered_map<std::string, Item> &items_to_process = device_name_item_changed() ? service_items : changed_items;
+    const std::unordered_map<std::string, Item> &items_to_process = new_device || device_name_item_changed() ? service_items : changed_items;
 
     for (const auto &item_pair : items_to_process) {
         const std::string &dbus_path = item_pair.first;
